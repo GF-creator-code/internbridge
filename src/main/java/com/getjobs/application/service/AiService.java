@@ -73,13 +73,24 @@ public class AiService {
             requestData.put("messages", messages);
         }
 
-        HttpRequest request = HttpRequest.newBuilder()
+        HttpRequest.Builder builder = HttpRequest.newBuilder()
                 .uri(URI.create(endpoint))
                 .header("Content-Type", "application/json")
                 .header("Accept", "application/json")
                 .header("Authorization", "Bearer " + apiKey)
                 // 某些服务（例如 Azure OpenAI）需要 api-key 头，额外加一层兼容
-                .header("api-key", apiKey)
+                .header("api-key", apiKey);
+
+        // opencode-go 网关要求带上会话标识，否则报 MissingSessionID
+        if (baseUrl != null && baseUrl.contains("opencode.ai")) {
+            String session = configService.getConfigValue("OPENCODE_SESSION");
+            if (session == null || session.isBlank()) {
+                session = "zc-opencode-go-7f3a92";
+            }
+            builder.header("x-opencode-session", session);
+        }
+
+        HttpRequest request = builder
                 .POST(HttpRequest.BodyPublishers.ofString(requestData.toString()))
                 .build();
 

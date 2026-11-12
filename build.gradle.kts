@@ -17,9 +17,9 @@ java {
 }
 
 repositories {
+    // 国内镜像优先（阿里云），mavenCentral 兜底
+    maven { url = uri("https://maven.aliyun.com/repository/public") }
     mavenCentral()
-    // 国内镜像可选：
-    // maven { url = uri("https://maven.aliyun.com/repository/public") }
 }
 
 dependencies {

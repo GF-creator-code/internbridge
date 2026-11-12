@@ -218,6 +218,20 @@ public class Liepin {
         return shouldStopCallback != null && Boolean.TRUE.equals(shouldStopCallback.get());
     }
 
+    /** 法律类岗位判定：命中任一关键词即跳过 */
+    private boolean isLegalJob(String text) {
+        if (text == null || text.isBlank()) {
+            return false;
+        }
+        String[] terms = {"法务", "法律", "律师", "律所", "非诉", "诉讼", "仲裁", "知识产权", "专利"};
+        for (String t : terms) {
+            if (text.contains(t)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private void info(String msg) {
         if (progressCallback != null) {
             progressCallback.onProgress(msg, null, null);
@@ -345,10 +359,12 @@ public class Liepin {
             String companyName = null;
             String salary = null;
             String recruiterName = null;
+            String compScale = null;
             if (i < lastApiEntities.size()) {
                 LiepinEntity apiEntity = lastApiEntities.get(i);
                 jobName = safeText(apiEntity.getJobTitle());
                 companyName = safeText(apiEntity.getCompName());
+                compScale = safeText(apiEntity.getCompScale());
                 salary = safeText(apiEntity.getJobSalaryText());
                 recruiterName = safeText(apiEntity.getHrName());
             }
@@ -356,6 +372,20 @@ public class Liepin {
             if (jobName == null) jobName = "岗位";
             if (companyName == null) companyName = "公司";
             if (salary == null) salary = "";
+
+            // 只投实习岗；避开法律岗、腾讯/字节、超小公司（1-49 人）
+            if (!jobName.contains("实习") || isLegalJob(jobName) || isLegalJob(companyName)) {
+                log.info("被过滤（非实习/法律岗）：公司={} | 岗位={}", companyName, jobName);
+                continue;
+            }
+            if (companyName.contains("腾讯") || companyName.contains("字节")) {
+                log.info("被过滤（硬性排除）：公司={} | 岗位={}", companyName, jobName);
+                continue;
+            }
+            if (compScale != null && compScale.contains("1-49")) {
+                log.info("被过滤（公司过小）：公司={} | 规模={} | 岗位={}", companyName, compScale, jobName);
+                continue;
+            }
             
             try {
                 // 使用JavaScript滚动到卡片位置，更稳定

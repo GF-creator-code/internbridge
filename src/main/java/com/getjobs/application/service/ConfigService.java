@@ -7,6 +7,7 @@ import com.getjobs.application.entity.LiepinConfigEntity;
 import com.getjobs.application.service.LiepinService;
 import com.getjobs.application.service.BossService;
 import com.getjobs.application.service.ZhilianService;
+import com.getjobs.application.service.ShixisengService;
 import com.getjobs.application.service.Job51Service;
 import com.getjobs.worker.boss.BossConfig;
 import com.getjobs.worker.job51.Job51Config;
@@ -33,6 +34,7 @@ public class ConfigService {
     private final LiepinService liepinService;
     private final BossService bossService;
     private final ZhilianService zhilianService;
+    private final ShixisengService shixisengService;
     private final Job51Service job51Service;
 
     /**
@@ -286,5 +288,12 @@ public class ConfigService {
      */
     public Job51Config getJob51Config() {
         return job51Service.loadJob51Config();
+    }
+
+    /**
+     * 统一入口：从专表 shixiseng_config 读取并构建 ShiXiSengConfig
+     */
+    public com.getjobs.worker.shixiseng.ShiXiSengConfig getShixisengConfig() {
+        return shixisengService.loadShixisengConfig();
     }
 }
