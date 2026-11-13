@@ -293,6 +293,10 @@ public class ShiXiSeng {
                         log.info("被过滤（法律岗）：{} | {}", pj.companyName, pj.jobTitle);
                         continue;
                     }
+                    if (isTechnicalJob(pj.jobTitle)) {
+                        log.info("被过滤（技术难度大）：{} | {}", pj.companyName, pj.jobTitle);
+                        continue;
+                    }
                     // 实习僧整站都是实习岗，不按标题里的「实习」二字过滤
                     if (deliverOne(pj)) {
                         resultList.add(buildJob(pj));
@@ -642,6 +646,32 @@ public class ShiXiSeng {
         String[] terms = {"法务", "法律", "律师", "律所", "非诉", "诉讼", "仲裁", "知识产权", "专利"};
         for (String t : terms) {
             if (text.contains(t)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * 技术难度大的岗位：纯开发/算法/硬件方向跳过，优先商科与非技术岗
+     */
+    private boolean isTechnicalJob(String title) {
+        if (title == null || title.isBlank()) {
+            return false;
+        }
+        String[] terms = {
+                "开发", "開發", "研发", "研發", "后端", "後端", "前端", "全栈", "全端",
+                "客户端", "客戶端", "服务端", "服務端", "算法工程师", "算法研究",
+                "机器学习", "機器學習", "深度学习", "深度學習", "大模型", "NLP", "自然语言", "自然語言",
+                "计算机视觉", "計算機視覺", "嵌入式", "硬件", "硬體", "芯片", "晶片", "FPGA",
+                "驱动", "驅動", "测试开发", "測試開發", "自动化测试", "自動化測試",
+                "运维", "運維", "网络工程", "網絡工程", "安全工程师", "安全工程師", "渗透", "滲透",
+                "架构师", "架構師", "Java", "C++", "Golang", "Go开发", "Python开发",
+                "数据开发", "數據開發", "大数据开发", "大數據開發", "爬虫", "爬蟲",
+                "游戏开发", "遊戲開發", "Unity", "安卓", "iOS"
+        };
+        for (String t : terms) {
+            if (title.contains(t)) {
                 return true;
             }
         }

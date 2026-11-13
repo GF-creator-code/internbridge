@@ -23,7 +23,7 @@ import java.util.Set;
 @RequiredArgsConstructor
 public class DefaultPageConfigInitializer implements CommandLineRunner {
     private static final List<String> TABLES = List.of(
-            "boss_config", "liepin_config", "job51_config", "zhilian_config", "shixiseng_config", "ai", "boss_blacklist");
+            "boss_config", "liepin_config", "job51_config", "zhilian_config", "shixiseng_config", "offertoday_config", "jobsdb_config", "ai", "boss_blacklist");
     private final JdbcTemplate jdbc;
     private final ObjectMapper objectMapper;
 

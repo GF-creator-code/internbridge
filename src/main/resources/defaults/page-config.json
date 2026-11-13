@@ -50,6 +50,18 @@
       "city": "北京"
     }
   ],
+  "offertoday_config": [
+    {
+      "keywords": "[\"實習\",\"數據分析\",\"市場營銷\",\"金融\",\"會計\",\"諮詢\",\"運營\",\"人力資源\",\"行政\",\"研究\"]",
+      "city": "香港"
+    }
+  ],
+  "jobsdb_config": [
+    {
+      "keywords": "[\"internship\",\"finance internship\",\"accounting internship\",\"consulting internship\",\"data analyst internship\",\"marketing internship\",\"business analyst internship\",\"human resources internship\"]",
+      "city": "Hong Kong"
+    }
+  ],
   "ai": [
     {
       "introduce": "我熟练使用Java Python Golang语言进行开发，目前主要方向为AI开发，Java熟悉Spring Boot、Cloud生态体系，擅长MySQL、Oracle、PostgreSQL等关系型数据库以及MongoDB、Redis等非关系型数据库。熟悉Docker、Kubernetes等容器化技术，掌握WebSocket、Netty等通信协议，拥有即时通讯系统的开发经验。熟练使用MyBatis-Plus、Spring Data、Django ORM等ORM框架，熟练使用Python、Golang开发，具备机器学习、深度学习及大语言模型的开发与部署经验。此外，我熟悉前端开发，涉及Vue、React、Nginx配置及PHP框架应用",

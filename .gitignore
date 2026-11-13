@@ -74,3 +74,11 @@ docs/node_modules/
 docs/.vitepress/cache/
 docs/.vitepress/dist/
 dialog.html
+
+# 任务浏览器持久化数据（含登录态，绝对不能提交）
+browser-data-tasks/
+
+# 运行日志与一次性脚本
+logs/
+service.log
+stop-at-1730.ps1

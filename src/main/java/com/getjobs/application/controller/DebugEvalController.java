@@ -28,6 +28,8 @@ public class DebugEvalController {
             case "liepin" -> playwrightManager.getLiepinPage();
             case "zhilian" -> playwrightManager.getZhilianPage();
             case "shixiseng" -> playwrightManager.getShixisengPage();
+            case "offertoday" -> playwrightManager.getOfferTodayPage();
+            case "jobsdb" -> playwrightManager.getJobsdbPage();
             default -> null;
         };
         if (p == null) {
@@ -69,4 +71,35 @@ public class DebugEvalController {
         }
         return resp;
     }
+
+    /**
+     * 通用鼠标拖拽（用于滑块验证码）
+     */
+    @PostMapping("/drag")
+    public Map<String, Object> drag(@RequestBody Map<String, Object> body) {
+        Map<String, Object> resp = new HashMap<>();
+        try {
+            Page p = pageOf(String.valueOf(body.get("platform")));
+            double x1 = Double.parseDouble(String.valueOf(body.get("x1")));
+            double y1 = Double.parseDouble(String.valueOf(body.get("y1")));
+            double x2 = Double.parseDouble(String.valueOf(body.get("x2")));
+            double y2 = Double.parseDouble(String.valueOf(body.get("y2")));
+            int steps = body.get("steps") == null ? 40 : Integer.parseInt(String.valueOf(body.get("steps")));
+            p.mouse().move(x1, y1);
+            p.mouse().down();
+            for (int i = 1; i <= steps; i++) {
+                double t = (double) i / steps;
+                p.mouse().move(x1 + (x2 - x1) * t, y1 + (y2 - y1) * t);
+                try { Thread.sleep(10 + (i % 5) * 5); } catch (InterruptedException ignored) {}
+            }
+            p.mouse().up();
+            resp.put("success", true);
+            resp.put("url", p.url());
+        } catch (Exception e) {
+            resp.put("success", false);
+            resp.put("message", e.getMessage());
+        }
+        return resp;
+    }
+
 }

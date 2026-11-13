@@ -36,6 +36,8 @@ public class ConfigService {
     private final ZhilianService zhilianService;
     private final ShixisengService shixisengService;
     private final Job51Service job51Service;
+    private final OfferTodayService offerTodayService;
+    private final JobsdbService jobsdbService;
 
     /**
      * 获取所有配置（以Map形式返回）
@@ -295,5 +297,19 @@ public class ConfigService {
      */
     public com.getjobs.worker.shixiseng.ShiXiSengConfig getShixisengConfig() {
         return shixisengService.loadShixisengConfig();
+    }
+
+    /**
+     * 统一入口：从专表 offertoday_config 读取并构建 OfferTodayConfig
+     */
+    public com.getjobs.worker.offertoday.OfferTodayConfig getOfferTodayConfig() {
+        return offerTodayService.loadOfferTodayConfig();
+    }
+
+    /**
+     * 统一入口：从专表 jobsdb_config 读取并构建 JobsdbConfig
+     */
+    public com.getjobs.worker.jobsdb.JobsdbConfig getJobsdbConfig() {
+        return jobsdbService.loadJobsdbConfig();
     }
 }

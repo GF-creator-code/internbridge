@@ -5,6 +5,7 @@ import com.getjobs.worker.boss.Boss;
 import com.getjobs.worker.boss.BossConfig;
 import com.getjobs.worker.dto.JobProgressMessage;
 import com.getjobs.worker.manager.PlaywrightManager;
+import com.getjobs.worker.manager.PlatformTaskBrowser;
 import com.microsoft.playwright.Page;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -26,6 +27,7 @@ public class BossJobService implements JobPlatformService {
     private static final String PLATFORM = "boss";
 
     private final PlaywrightManager playwrightManager;
+    private final PlatformTaskBrowser platformTaskBrowser;
     private final ConfigService configService;
     private final ObjectProvider<Boss> bossProvider;
 
@@ -95,7 +97,10 @@ public class BossJobService implements JobPlatformService {
             // 整个投递流程必须跑在 Playwright 专用线程上。
             // 原来跑在 ForkJoinPool 上，会和 scheduling-1 的登录监控同时操作同一条
             // Playwright 连接，导航被打断报 net::ERR_ABORTED，整个任务直接挂掉。
-            int deliveredCount = playwrightManager.callOnPlaywright(boss::execute);
+            int deliveredCount = platformTaskBrowser.run(PLATFORM, taskPage -> {
+                boss.setPage(taskPage);
+                return boss.execute();
+            });
 
             progressCallback.accept(JobProgressMessage.success(PLATFORM,
                 String.format("投递任务完成，共发起%d个聊天", deliveredCount)));

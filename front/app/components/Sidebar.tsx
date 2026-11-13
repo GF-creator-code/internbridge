@@ -75,6 +75,8 @@ export default function Sidebar() {
     { href: '/51job', icon: BiTask, label: '51job', color: 'text-blue-300' },
     { href: '/zhilian', icon: BiUserCircle, label: '智联招聘', color: 'text-cyan-300' },
   { href: '/shixiseng', icon: BiBriefcase, label: '实习僧', color: 'text-emerald-300' },
+  { href: '/offertoday', icon: BiBriefcase, label: 'OfferToday', color: 'text-sky-300' },
+  { href: '/jobsdb', icon: BiBriefcase, label: 'JobsDB', color: 'text-violet-300' },
   ]
 
   return (

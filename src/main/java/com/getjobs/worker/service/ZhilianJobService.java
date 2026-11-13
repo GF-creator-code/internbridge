@@ -3,6 +3,7 @@ package com.getjobs.worker.service;
 import com.getjobs.application.service.ConfigService;
 import com.getjobs.worker.dto.JobProgressMessage;
 import com.getjobs.worker.manager.PlaywrightManager;
+import com.getjobs.worker.manager.PlatformTaskBrowser;
 import com.getjobs.worker.zhilian.ZhiLian;
 import com.getjobs.worker.zhilian.ZhilianConfig;
 import com.microsoft.playwright.Page;
@@ -26,6 +27,7 @@ public class ZhilianJobService implements JobPlatformService {
     private static final String PLATFORM = "zhilian";
 
     private final PlaywrightManager playwrightManager;
+    private final PlatformTaskBrowser platformTaskBrowser;
     private final ObjectProvider<ZhiLian> zhilianProvider;
     private final ConfigService configService;
 
@@ -89,7 +91,10 @@ public class ZhilianJobService implements JobPlatformService {
             zhilian.prepare();
 
             // 必须跑在 Playwright 专用线程上，否则会和后台登录监控并发操作同一条连接
-            int deliveredCount = playwrightManager.callOnPlaywright(zhilian::execute);
+            int deliveredCount = platformTaskBrowser.run(PLATFORM, taskPage -> {
+                zhilian.setPage(taskPage);
+                return zhilian.execute();
+            });
 
             progressCallback.accept(JobProgressMessage.success(PLATFORM,
                 String.format("投递任务完成，共投递%d个职位", deliveredCount)));

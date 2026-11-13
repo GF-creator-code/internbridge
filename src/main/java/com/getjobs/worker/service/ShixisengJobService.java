@@ -3,6 +3,7 @@ package com.getjobs.worker.service;
 import com.getjobs.application.service.ConfigService;
 import com.getjobs.worker.dto.JobProgressMessage;
 import com.getjobs.worker.manager.PlaywrightManager;
+import com.getjobs.worker.manager.PlatformTaskBrowser;
 import com.getjobs.worker.shixiseng.ShiXiSeng;
 import com.getjobs.worker.shixiseng.ShiXiSengConfig;
 import com.microsoft.playwright.Page;
@@ -26,6 +27,7 @@ public class ShixisengJobService implements JobPlatformService {
     private static final String PLATFORM = "shixiseng";
 
     private final PlaywrightManager playwrightManager;
+    private final PlatformTaskBrowser platformTaskBrowser;
     private final ObjectProvider<ShiXiSeng> shixisengProvider;
     private final ConfigService configService;
 
@@ -81,7 +83,10 @@ public class ShixisengJobService implements JobPlatformService {
             shixiseng.setShouldStopCallback(this::shouldStop);
             shixiseng.prepare();
 
-            int deliveredCount = playwrightManager.callOnPlaywright(shixiseng::execute);
+            int deliveredCount = platformTaskBrowser.run(PLATFORM, taskPage -> {
+                shixiseng.setPage(taskPage);
+                return shixiseng.execute();
+            });
 
             progressCallback.accept(JobProgressMessage.success(PLATFORM,
                     String.format("投递任务完成，共投递%d个职位", deliveredCount)));

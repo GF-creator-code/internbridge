@@ -114,6 +114,8 @@ public class JobController {
             boolean job51LoggedIn = playwrightManager.isLoggedIn("51job");
             boolean zhilianLoggedIn = playwrightManager.isLoggedIn("zhilian");
             boolean shixisengLoggedIn = playwrightManager.isLoggedIn("shixiseng");
+            boolean offerTodayLoggedIn = playwrightManager.isLoggedIn("offertoday");
+            boolean jobsdbLoggedIn = playwrightManager.isLoggedIn("jobsdb");
 
             emitter.send(SseEmitter.event()
                     .name("connected")
@@ -123,7 +125,9 @@ public class JobController {
                             "liepinLoggedIn", liepinLoggedIn,
                             "job51LoggedIn", job51LoggedIn,
                             "zhilianLoggedIn", zhilianLoggedIn,
-                            "shixisengLoggedIn", shixisengLoggedIn
+                            "shixisengLoggedIn", shixisengLoggedIn,
+                            "offertodayLoggedIn", offerTodayLoggedIn,
+                            "jobsdbLoggedIn", jobsdbLoggedIn
                     )));
         } catch (IOException e) {
             log.error("发送SSE连接消息失败", e);

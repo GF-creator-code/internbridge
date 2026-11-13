@@ -75,6 +75,12 @@ public class PlaywrightManager {
     // 实习僧页面
     private Page shixisengPage;
 
+    // OfferToday（香港）页面
+    private Page offerTodayPage;
+
+    // JobsDB（香港）页面
+    private Page jobsdbPage;
+
     // 登录状态追踪（平台 -> 是否已登录）
     private final Map<String, Boolean> loginStatus = new ConcurrentHashMap<>();
 
@@ -94,6 +100,12 @@ public class PlaywrightManager {
 
     // 控制是否暂停对shixisengPage的后台监控
     private volatile boolean shixisengMonitoringPaused = false;
+
+    // 控制是否暂停对offerTodayPage的后台监控
+    private volatile boolean offerTodayMonitoringPaused = false;
+
+    // 控制是否暂停对jobsdbPage的后台监控
+    private volatile boolean jobsdbMonitoringPaused = false;
 
     // 记录智联招聘是否已处理过未登录引导（仅初始化时执行一次）
     private volatile boolean zhilianLoginGuided = false;
@@ -136,6 +148,10 @@ public class PlaywrightManager {
     private static final String ZHILIAN_DOMAIN = "zhaopin.com";
     private static final String SHIXISENG_URL = "https://www.shixiseng.com";
     private static final String SHIXISENG_DOMAIN = "shixiseng.com";
+    private static final String OFFERTODAY_URL = "https://www.offertoday.com";
+    private static final String OFFERTODAY_DOMAIN = "offertoday.com";
+    private static final String JOBSDB_URL = "https://hk.jobsdb.com";
+    private static final String JOBSDB_DOMAIN = "jobsdb.com";
     // 降噪：51job Cookie保存日志节流状态
     private volatile long last51CookieLogMs = 0L;
     private volatile int last51CookieLogCount = -1;
@@ -143,6 +159,12 @@ public class PlaywrightManager {
 
     @Autowired
     private CookieService cookieService;
+
+    @Autowired
+    private com.getjobs.application.service.OfferTodayService offerTodayService;
+
+    @Autowired
+    private com.getjobs.application.service.JobsdbService jobsdbService;
 
     // ------------------------------------------------------------------
     // Playwright 单线程调度
@@ -380,6 +402,14 @@ public class PlaywrightManager {
             shixisengPage.setDefaultTimeout(DEFAULT_TIMEOUT);
             log.info("✓ 实习僧 Page已创建");
 
+            offerTodayPage = context.newPage();
+            offerTodayPage.setDefaultTimeout(DEFAULT_TIMEOUT);
+            log.info("✓ OfferToday Page已创建");
+
+            jobsdbPage = context.newPage();
+            jobsdbPage.setDefaultTimeout(DEFAULT_TIMEOUT);
+            log.info("✓ JobsDB Page已创建");
+
             // 四个业务页都建好了，把持久化上下文自带的启动空白页关掉
             for (Page startup : startupPages) {
                 try {
@@ -400,6 +430,8 @@ public class PlaywrightManager {
             setup51jobPlatform();
             setupZhilianPlatform();
             setupShixisengPlatform();
+            setupOfferTodayPlatform();
+            setupJobsdbPlatform();
 
             log.info("✓ 浏览器自动化引擎初始化完成（所有平台已依次启动）");
             log.info("========================================");
@@ -1530,6 +1562,535 @@ public class PlaywrightManager {
         log.debug("实习僧登录监控已恢复");
     }
 
+    // ==================== OfferToday（香港） ====================
+
+    private void setupOfferTodayPlatform() {
+        log.info("开始初始化 OfferToday 平台...");
+
+        try {
+            CookieEntity cookieEntity = cookieService.getCookieByPlatform("offertoday");
+            if (cookieEntity != null && cookieEntity.getCookieValue() != null && !cookieEntity.getCookieValue().isBlank()) {
+                List<Cookie> cookies = filterCookiesByDomain(
+                        parseCookiesFromString(cookieEntity.getCookieValue()), OFFERTODAY_DOMAIN);
+                if (!cookies.isEmpty()) {
+                    context.addCookies(cookies);
+                    log.info("已从数据库加载 OfferToday Cookie 并注入浏览器上下文，共 {} 条", cookies.size());
+                } else {
+                    log.warn("解析 OfferToday Cookie 失败，未能加载任何 Cookie");
+                }
+            } else {
+                log.info("数据库未找到 OfferToday Cookie 或值为空，跳过 Cookie 注入");
+            }
+        } catch (Exception e) {
+            log.warn("从数据库加载 OfferToday Cookie 失败: {}", e.getMessage());
+        }
+
+        int maxRetries = 3;
+        boolean navigateSuccess = false;
+        for (int attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+                offerTodayPage.navigate(OFFERTODAY_URL, new Page.NavigateOptions()
+                        .setTimeout(60000)
+                        .setWaitUntil(WaitUntilState.DOMCONTENTLOADED));
+                navigateSuccess = true;
+                break;
+            } catch (Exception e) {
+                boolean pageAccessible = false;
+                try {
+                    String url = offerTodayPage.url();
+                    pageAccessible = url != null && url.contains(OFFERTODAY_DOMAIN);
+                } catch (Exception ignored) {
+                }
+                if (pageAccessible) {
+                    navigateSuccess = true;
+                    break;
+                }
+                if (attempt < maxRetries) {
+                    try {
+                        Thread.sleep(2000);
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                    }
+                }
+            }
+        }
+        if (!navigateSuccess) {
+            log.warn("OfferToday 页面导航失败");
+        }
+
+        try {
+            offerTodayPage.waitForLoadState(LoadState.NETWORKIDLE,
+                    new Page.WaitForLoadStateOptions().setTimeout(LOAD_STATE_TIMEOUT));
+        } catch (Exception e) {
+            log.debug("等待 OfferToday 页面网络空闲失败: {}", e.getMessage());
+        }
+
+        setLoginStatus("offertoday", checkIfOfferTodayLoggedIn());
+        setupOfferTodayLoginMonitoring(offerTodayPage);
+    }
+
+    /**
+     * 检查 OfferToday 是否已登录。
+     * 登录态存在 localStorage/前端状态里，Cookie 名不固定且匿名访问也会有 session Cookie，
+     * 因此只以页面元素为准：页头有「登入」按钮 = 未登录；有头像 = 已登录。
+     */
+    private boolean checkIfOfferTodayLoggedIn() {
+        try {
+            if (offerTodayPage == null) {
+                return false;
+            }
+            Locator loginBtn = offerTodayPage.locator("button:has-text('登入')").first();
+            if (loginBtn.count() > 0 && isVisibleQuick(loginBtn)) {
+                return false;
+            }
+            Locator avatars = offerTodayPage.locator("img[alt='avatar']");
+            int n = avatars.count();
+            for (int i = 0; i < n; i++) {
+                if (isVisibleQuick(avatars.nth(i))) {
+                    return true;
+                }
+            }
+            return false;
+        } catch (Exception e) {
+            log.warn("OfferToday：检查登录状态异常: {}", e.getMessage());
+            return false;
+        }
+    }
+
+    private void setupOfferTodayLoginMonitoring(Page page) {
+        page.onFrameNavigated(frame -> {
+            if (frame == page.mainFrame()) {
+                if (!offerTodayMonitoringPaused && !isPlaywrightBusy()) {
+                    checkOfferTodayLoginStatus(page);
+                }
+            }
+        });
+        log.info("OfferToday 平台登录状态监控已启用");
+    }
+
+    private void checkOfferTodayLoginStatus(Page page) {
+        try {
+            boolean isLoggedIn = checkIfOfferTodayLoggedIn();
+            Boolean previousStatus = loginStatus.get("offertoday");
+            if (isLoggedIn && (previousStatus == null || !previousStatus)) {
+                onOfferTodayLoginSuccess();
+            }
+        } catch (Exception e) {
+            log.debug("检查 OfferToday 登录状态时发生异常: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * 触发 OfferToday 登录：优先用 offertoday_config 里的账号密码自动登录，
+     * 没有配置或自动登录失败时，退回让用户在浏览器窗口手动完成。
+     */
+    public void triggerOfferTodayLogin() {
+        callOnPlaywright(() -> {
+            doTriggerOfferTodayLogin();
+            return null;
+        });
+    }
+
+    private void doTriggerOfferTodayLogin() {
+        try {
+            if (offerTodayPage == null) {
+                throw new IllegalStateException("OfferToday 页面未初始化");
+            }
+
+            boolean navOk = false;
+            for (int attempt = 1; attempt <= 3 && !navOk; attempt++) {
+                try {
+                    offerTodayPage.navigate(OFFERTODAY_URL, new Page.NavigateOptions()
+                            .setTimeout(60000)
+                            .setWaitUntil(WaitUntilState.DOMCONTENTLOADED));
+                    navOk = true;
+                } catch (Exception navEx) {
+                    String url = null;
+                    try { url = offerTodayPage.url(); } catch (Exception ignored) {}
+                    if (url != null && url.contains(OFFERTODAY_DOMAIN)) {
+                        navOk = true;
+                    } else if (attempt < 3) {
+                        try { Thread.sleep(2000); } catch (InterruptedException ie) {
+                            Thread.currentThread().interrupt();
+                        }
+                    } else {
+                        throw navEx;
+                    }
+                }
+            }
+
+            if (checkIfOfferTodayLoggedIn()) {
+                log.info("OfferToday 已是登录状态");
+                onOfferTodayLoginSuccess();
+                return;
+            }
+
+            Locator loginEntry = offerTodayPage.locator("button:has-text('登入')").first();
+            if (loginEntry.count() > 0 && isVisibleQuick(loginEntry)) {
+                loginEntry.click(new Locator.ClickOptions().setTimeout(DEFAULT_TIMEOUT));
+                Thread.sleep(1500);
+            }
+
+            String account = null;
+            String password = null;
+            try {
+                var cfg = offerTodayService.getFirstConfig();
+                if (cfg != null) {
+                    account = cfg.getAccount();
+                    password = cfg.getPassword();
+                }
+            } catch (Exception ignored) {
+            }
+
+            if (account != null && !account.isBlank()) {
+                try {
+                    Locator accountInput = offerTodayPage.locator("input[placeholder*='電郵地址'], input[placeholder*='電邮地址']").first();
+                    accountInput.waitFor(new Locator.WaitForOptions().setTimeout(15000));
+                    accountInput.fill(account);
+                    Thread.sleep(500);
+
+                    // OfferToday 默认是「邮箱 → 開始」的验证码/注册流程；
+                    // 已有账号要用「密碼登入」切到密码模式再填密码。
+                    Locator pwdMode = offerTodayPage.locator("text=密碼登入").first();
+                    if (pwdMode.count() > 0) {
+                        pwdMode.click();
+                        Thread.sleep(1200);
+                    }
+
+                    Locator pwdInput = offerTodayPage.locator("input[placeholder='密碼']").first();
+                    if (pwdInput.count() == 0) {
+                        pwdInput = offerTodayPage.locator("input[type='password']:visible").first();
+                    }
+                    if (pwdInput.count() > 0 && password != null && !password.isBlank()) {
+                        pwdInput.click();
+                        pwdInput.fill(password);
+                        Thread.sleep(500);
+
+                        // 勾选服务协议
+                        try {
+                            Locator boxes = offerTodayPage.locator("input[type='checkbox']:visible");
+                            int bn = boxes.count();
+                            if (bn > 0 && !boxes.nth(bn - 1).isChecked()) {
+                                boxes.nth(bn - 1).check();
+                            }
+                        } catch (Exception ignored) {
+                        }
+
+                        // 弹窗里的「登入」是最后一个同名按钮
+                        Locator submits = offerTodayPage.locator("button:has-text('登入')");
+                        int sn = submits.count();
+                        if (sn > 0) {
+                            submits.nth(sn - 1).click();
+                        }
+                        log.info("已提交 OfferToday 账号密码登录");
+                    }
+                } catch (Exception e) {
+                    log.warn("OfferToday 账号密码自动登录失败，转手动: {}", e.getMessage());
+                }
+            } else {
+                log.info("未配置 OfferToday 账号密码，请在浏览器窗口手动完成登录");
+            }
+
+            for (int i = 0; i < 60; i++) {
+                Thread.sleep(2000);
+                if (checkIfOfferTodayLoggedIn()) {
+                    onOfferTodayLoginSuccess();
+                    return;
+                }
+            }
+            log.warn("等待 OfferToday 登录成功超时");
+        } catch (Exception e) {
+            log.error("触发 OfferToday 登录流程失败: {}", e.getMessage(), e);
+            throw new RuntimeException("触发 OfferToday 登录流程失败", e);
+        }
+    }
+
+    private void onOfferTodayLoginSuccess() {
+        log.info("OfferToday 平台登录成功");
+        setLoginStatus("offertoday", true);
+        saveOfferTodayCookiesToDatabase("login success");
+    }
+
+    private void saveOfferTodayCookiesToDatabase(String remark) {
+        try {
+            List<Cookie> cookies = filterCookiesByDomain(context.cookies(), OFFERTODAY_DOMAIN);
+            String cookieJson = new ObjectMapper().writeValueAsString(cookies);
+            boolean result = cookieService.saveOrUpdateCookie("offertoday", cookieJson, remark);
+            if (result) {
+                log.info("保存 OfferToday Cookie 成功，共 {} 条，remark={}", cookies.size(), remark);
+            }
+        } catch (Exception e) {
+            log.warn("保存 OfferToday Cookie 失败: {}", e.getMessage());
+        }
+    }
+
+    public void saveOfferTodayCookiesToDb(String remark) {
+        saveOfferTodayCookiesToDatabase(remark);
+    }
+
+    public void pauseOfferTodayMonitoring() {
+        offerTodayMonitoringPaused = true;
+        log.debug("OfferToday 登录监控已暂停");
+    }
+
+    public void resumeOfferTodayMonitoring() {
+        offerTodayMonitoringPaused = false;
+        log.debug("OfferToday 登录监控已恢复");
+    }
+
+    // ==================== JobsDB（香港） ====================
+
+    private void setupJobsdbPlatform() {
+        log.info("开始初始化 JobsDB 平台...");
+
+        try {
+            CookieEntity cookieEntity = cookieService.getCookieByPlatform("jobsdb");
+            if (cookieEntity != null && cookieEntity.getCookieValue() != null && !cookieEntity.getCookieValue().isBlank()) {
+                List<Cookie> cookies = filterCookiesByDomain(
+                        parseCookiesFromString(cookieEntity.getCookieValue()), JOBSDB_DOMAIN);
+                if (!cookies.isEmpty()) {
+                    context.addCookies(cookies);
+                    log.info("已从数据库加载 JobsDB Cookie 并注入浏览器上下文，共 {} 条", cookies.size());
+                } else {
+                    log.warn("解析 JobsDB Cookie 失败，未能加载任何 Cookie");
+                }
+            } else {
+                log.info("数据库未找到 JobsDB Cookie 或值为空，跳过 Cookie 注入");
+            }
+        } catch (Exception e) {
+            log.warn("从数据库加载 JobsDB Cookie 失败: {}", e.getMessage());
+        }
+
+        int maxRetries = 3;
+        boolean navigateSuccess = false;
+        for (int attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+                jobsdbPage.navigate(JOBSDB_URL, new Page.NavigateOptions()
+                        .setTimeout(60000)
+                        .setWaitUntil(WaitUntilState.DOMCONTENTLOADED));
+                navigateSuccess = true;
+                break;
+            } catch (Exception e) {
+                boolean pageAccessible = false;
+                try {
+                    String url = jobsdbPage.url();
+                    pageAccessible = url != null && url.contains(JOBSDB_DOMAIN);
+                } catch (Exception ignored) {
+                }
+                if (pageAccessible) {
+                    navigateSuccess = true;
+                    break;
+                }
+                if (attempt < maxRetries) {
+                    try {
+                        Thread.sleep(2000);
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                    }
+                }
+            }
+        }
+        if (!navigateSuccess) {
+            log.warn("JobsDB 页面导航失败");
+        }
+
+        try {
+            jobsdbPage.waitForLoadState(LoadState.NETWORKIDLE,
+                    new Page.WaitForLoadStateOptions().setTimeout(LOAD_STATE_TIMEOUT));
+        } catch (Exception e) {
+            log.debug("等待 JobsDB 页面网络空闲失败: {}", e.getMessage());
+        }
+
+        setLoginStatus("jobsdb", checkIfJobsdbLoggedIn());
+        setupJobsdbLoginMonitoring(jobsdbPage);
+
+        // 页面偶发 beforeunload/confirm 弹窗，没人处理会卡住导航
+        jobsdbPage.onDialog(dialog -> {
+            log.debug("JobsDB 页面弹窗，自动确认: {}", dialog.message());
+            dialog.accept();
+        });
+    }
+
+    /**
+     * 检查 JobsDB 是否已登录：页头出现 Profile Avatar 且没有 Sign in 链接。
+     */
+    private boolean checkIfJobsdbLoggedIn() {
+        try {
+            if (jobsdbPage == null) {
+                return false;
+            }
+            // 页头有多个同 aria-label 的头像按钮（移动端/桌面端各一个），必须逐个看可见性
+            Locator avatars = jobsdbPage.locator("button[aria-label='Profile Avatar']");
+            int n = avatars.count();
+            for (int i = 0; i < n; i++) {
+                if (isVisibleQuick(avatars.nth(i))) {
+                    return true;
+                }
+            }
+            Locator signIn = jobsdbPage.locator("a[href*='/oauth/login']").first();
+            if (signIn.count() > 0 && isVisibleQuick(signIn)) {
+                return false;
+            }
+            return false;
+        } catch (Exception e) {
+            log.warn("JobsDB：检查登录状态异常: {}", e.getMessage());
+            return false;
+        }
+    }
+
+    private void setupJobsdbLoginMonitoring(Page page) {
+        page.onFrameNavigated(frame -> {
+            if (frame == page.mainFrame()) {
+                if (!jobsdbMonitoringPaused && !isPlaywrightBusy()) {
+                    checkJobsdbLoginStatus(page);
+                }
+            }
+        });
+        log.info("JobsDB 平台登录状态监控已启用");
+    }
+
+    private void checkJobsdbLoginStatus(Page page) {
+        try {
+            boolean isLoggedIn = checkIfJobsdbLoggedIn();
+            Boolean previousStatus = loginStatus.get("jobsdb");
+            if (isLoggedIn && (previousStatus == null || !previousStatus)) {
+                onJobsdbLoginSuccess();
+            }
+        } catch (Exception e) {
+            log.debug("检查 JobsDB 登录状态时发生异常: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * 触发 JobsDB 登录：SEEK 账号（Auth0）邮箱 + 密码。
+     */
+    public void triggerJobsdbLogin() {
+        callOnPlaywright(() -> {
+            doTriggerJobsdbLogin();
+            return null;
+        });
+    }
+
+    private void doTriggerJobsdbLogin() {
+        try {
+            if (jobsdbPage == null) {
+                throw new IllegalStateException("JobsDB 页面未初始化");
+            }
+
+            try {
+                jobsdbPage.navigate(JOBSDB_URL + "/oauth/login", new Page.NavigateOptions()
+                        .setTimeout(60000)
+                        .setWaitUntil(WaitUntilState.DOMCONTENTLOADED));
+            } catch (Exception navEx) {
+                log.debug("JobsDB 登录页导航异常: {}", navEx.getMessage());
+            }
+            Thread.sleep(3000);
+
+            if (checkIfJobsdbLoggedIn()) {
+                log.info("JobsDB 已是登录状态");
+                onJobsdbLoginSuccess();
+                return;
+            }
+
+            String account = null;
+            String password = null;
+            try {
+                var cfg = jobsdbService.getFirstConfig();
+                if (cfg != null) {
+                    account = cfg.getAccount();
+                    password = cfg.getPassword();
+                }
+            } catch (Exception ignored) {
+            }
+
+            if (account != null && !account.isBlank()) {
+                try {
+                    Locator email = jobsdbPage.locator("#username, input[name='email'], input[type='email']").first();
+                    email.waitFor(new Locator.WaitForOptions().setTimeout(15000));
+                    email.fill(account);
+                    Thread.sleep(500);
+                    Locator submit = jobsdbPage.locator("button[type='submit']").first();
+                    if (submit.count() > 0) {
+                        submit.click();
+                    } else {
+                        email.press("Enter");
+                    }
+                    Thread.sleep(2500);
+
+                    Locator pwd = jobsdbPage.locator("#password, input[type='password']").first();
+                    if (pwd.count() > 0 && password != null && !password.isBlank()) {
+                        pwd.fill(password);
+                        Thread.sleep(500);
+                        Locator submit2 = jobsdbPage.locator("button[type='submit']").first();
+                        if (submit2.count() > 0) {
+                            submit2.click();
+                        } else {
+                            pwd.press("Enter");
+                        }
+                        log.info("已提交 JobsDB 账号密码登录");
+                    }
+                } catch (Exception e) {
+                    log.warn("JobsDB 账号密码自动登录失败，转手动: {}", e.getMessage());
+                }
+            } else {
+                log.info("未配置 JobsDB 账号密码，请在浏览器窗口手动完成登录");
+            }
+
+            for (int i = 0; i < 60; i++) {
+                Thread.sleep(2000);
+                if (checkIfJobsdbLoggedIn()) {
+                    onJobsdbLoginSuccess();
+                    return;
+                }
+            }
+            log.warn("等待 JobsDB 登录成功超时");
+        } catch (Exception e) {
+            log.error("触发 JobsDB 登录流程失败: {}", e.getMessage(), e);
+            throw new RuntimeException("触发 JobsDB 登录流程失败", e);
+        }
+    }
+
+    private void onJobsdbLoginSuccess() {
+        log.info("JobsDB 平台登录成功");
+        setLoginStatus("jobsdb", true);
+        saveJobsdbCookiesToDatabase("login success");
+    }
+
+    private void saveJobsdbCookiesToDatabase(String remark) {
+        try {
+            // SEEK 的登录态横跨 jobsdb.com 和 seek.com（Auth0 SSO），
+            // 只存 jobsdb 域会把 appSession 丢掉，任务浏览器就登不上。
+            List<Cookie> cookies = new ArrayList<>();
+            for (Cookie c : context.cookies()) {
+                String d = c.domain == null ? "" : c.domain;
+                if (d.contains("jobsdb.com") || d.contains("seek.com")) {
+                    cookies.add(c);
+                }
+            }
+            String cookieJson = new ObjectMapper().writeValueAsString(cookies);
+            boolean result = cookieService.saveOrUpdateCookie("jobsdb", cookieJson, remark);
+            if (result) {
+                log.info("保存 JobsDB Cookie 成功，共 {} 条，remark={}", cookies.size(), remark);
+            }
+        } catch (Exception e) {
+            log.warn("保存 JobsDB Cookie 失败: {}", e.getMessage());
+        }
+    }
+
+    public void saveJobsdbCookiesToDb(String remark) {
+        saveJobsdbCookiesToDatabase(remark);
+    }
+
+    public void pauseJobsdbMonitoring() {
+        jobsdbMonitoringPaused = true;
+        log.debug("JobsDB 登录监控已暂停");
+    }
+
+    public void resumeJobsdbMonitoring() {
+        jobsdbMonitoringPaused = false;
+        log.debug("JobsDB 登录监控已恢复");
+    }
+
     /**
      * 检查智联招聘是否已登录
      * 未登录时只在首次检测时引导用户到登录页
@@ -1793,6 +2354,8 @@ public class PlaywrightManager {
             case "51job" -> save51jobCookiesToDatabase(remark);
             case "zhilian" -> saveZhilianCookiesToDatabase(remark);
             case "shixiseng" -> saveShixisengCookiesToDatabase(remark);
+            case "offertoday" -> saveOfferTodayCookiesToDatabase(remark);
+            case "jobsdb" -> saveJobsdbCookiesToDatabase(remark);
             default -> throw new IllegalArgumentException("Unsupported platform: " + platform);
         }
     }
@@ -2035,6 +2598,12 @@ public class PlaywrightManager {
                 if (shixisengPage != null && !shixisengMonitoringPaused) {
                     checkShixisengLoginStatus(shixisengPage);
                 }
+                if (offerTodayPage != null && !offerTodayMonitoringPaused) {
+                    checkOfferTodayLoginStatus(offerTodayPage);
+                }
+                if (jobsdbPage != null && !jobsdbMonitoringPaused) {
+                    checkJobsdbLoginStatus(jobsdbPage);
+                }
             } catch (Exception e) {
                 log.debug("定时登录检测异常: {}", e.getMessage());
             }
@@ -2086,6 +2655,14 @@ public class PlaywrightManager {
             if (shixisengPage != null) {
                 shixisengPage.close();
                 log.info("实习僧页面已关闭");
+            }
+            if (offerTodayPage != null) {
+                offerTodayPage.close();
+                log.info("OfferToday页面已关闭");
+            }
+            if (jobsdbPage != null) {
+                jobsdbPage.close();
+                log.info("JobsDB页面已关闭");
             }
 
             // 关闭共享的BrowserContext（持久化上下文关闭即等于关浏览器，没有独立的 Browser 对象）
@@ -2139,6 +2716,8 @@ public class PlaywrightManager {
         job51Page = null;
         zhilianPage = null;
         shixisengPage = null;
+        offerTodayPage = null;
+        jobsdbPage = null;
         browserClosed = false;
         loginStatus.clear();
         init();
