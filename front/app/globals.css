@@ -89,6 +89,7 @@
 .accent-emerald { --accent-rgb: 16 185 129; }
 .accent-indigo { --accent-rgb: 79 70 229; }
 .accent-violet { --accent-rgb: 139 92 246; }
+.accent-rose { --accent-rgb: 244 63 94; }
 
 .content-bg {
   background-image:

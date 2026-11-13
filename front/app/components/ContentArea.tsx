@@ -22,6 +22,8 @@ export default function ContentArea({ children }: { children: ReactNode }) {
       return 'accent-violet'
     case '/zhilian':
         return 'accent-sky'
+      case '/global-config':
+        return 'accent-rose'
       default:
         return ''
     }
