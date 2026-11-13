@@ -2,50 +2,36 @@
 layout: home
 
 hero:
-  name: "Get Jobs"
-  text: "让 AI 替你海投简历"
-  tagline: "把时间留给面试准备 · 全平台自动化投递<br>AI 智能定制打招呼语 · 精准企业黑名单过滤"
+  name: "Get Jobs · Multi-Platform"
+  text: "七平台统一的全自动求职投递"
+  tagline: "把时间留给面试准备 · 平台级并发投递<br>通用关键词过滤 · AI 智能定制招呼语 · 精准企业黑名单"
   actions:
     - theme: brand
-      text: 🚀 5分钟快速上手
+      text: 🚀 快速上手
       link: /guide/quick-start
     - theme: alt
-      text: ⭐ GitHub 点赞支持
+      text: 🌱 上游原版项目
       link: https://github.com/loks666/get_jobs
 
 features:
   - icon: 🌐
-    title: 全平台覆盖
-    details: 覆盖 Boss直聘、猎聘等招聘平台；当前主要维护 Boss 与猎聘，其他平台已停止维护。
+    title: 七平台覆盖
+    details: Boss直聘、实习僧、智联招聘、猎聘、51job、JobsDB（香港）、OfferToday（香港），每平台独立配置页与投递分析看板。
+  - icon: 🚀
+    title: 平台级并发
+    details: 每平台独立 Playwright 实例 + 持久化浏览器 profile + 独立执行线程，多平台同时投递互不阻塞，Cookie 自动注入回写。
+  - icon: 🧩
+    title: 通用关键词过滤
+    details: 标题必含 / 排除关键词双列表机制，全平台共用一套代码，规则作为配置数据存在配置页，改规则不改代码。
   - icon: 🤖
     title: AI 智能打招呼
-    details: 接入兼容 OpenAI 格式的大模型，基于个人求职简历与岗位 JD 动态撰写打招呼语，目前仅限 Boss直聘。
+    details: 接入兼容 OpenAI 格式的大模型，基于个人简历与岗位 JD 动态撰写招呼语 / Cover Letter，可按平台开关。
   - icon: 🛡️
-    title: 黑名单与精准过滤
-    details: 智能跳过不活跃 HR、猎头岗位、外包公司，自动将沟通不顺企业加入黑名单，拒绝无效沟通。
-  - icon: 📱
-    title: 实时消息推送
-    details: 支持企业微信 Webhook 实时通知，投递状态、沟通反馈随时掌握，不在电脑前也能洞察全局。
+    title: 多层过滤闸
+    details: 黑名单（公司/职位/招聘者）、HR 活跃度、公司规模、实习岗限定、单关键词投递上限，层层把关。
   - icon: 💾
     title: 本地数据持久化
-    details: 基于轻量级 SQLite 存储配置与投递日志，配置与投递记录保留在本机，方便追踪投递进度。
-  - icon: ⚡
-    title: 优雅开箱即用
-    details: 配套直观的前端 Web GUI 管理面板，开箱即用，无需繁琐调试即可轻松开启批量投递。
----
-
-<div style="text-align: center; margin-top: 2rem;">
-
-### 📊 社区实时动态
-
-<div class="readme-badges">
-
-<!--@include: ./snippets/badges.md-->
-
-</div>
-
-</div>
-
+    details: 基于轻量级 SQLite 存储配置、登录态与投递记录，全部保留在本机；配置接口密码不回显。
 ---
 
 ## 🖥️ 看得见的求职工作台
@@ -57,53 +43,31 @@ features:
 [浏览全部界面截图 →](/guide/screenshots) · [了解完整功能 →](/guide/introduction)
 
 ::: warning 使用前先了解
-当前主要维护 **Boss直聘、猎聘**；智联招聘、前程无忧和拉勾已停止维护。README 建议 Boss 仍以手动投递为主，本项目用于 PC 端辅助。非商业使用免费，AI 接口费用由所选服务商收取。
+本仓库为 [loks666/get_jobs](https://github.com/loks666/get_jobs) 的增强 fork，协议（PolyForm Noncommercial）继承上游：非商业使用免费，AI 接口费用由所选服务商收取。各招聘平台页面结构会随时间变化，选择器失效请按平台自行修正。
 :::
 
 ## ⚡ 三步极简启动
 
-仅需 3 步，即可在本地启动 AI 自动求职引擎：
-
 ```bash
 # 1. 克隆项目仓库
-git clone https://github.com/loks666/get_jobs.git
+git clone <你的仓库地址>
 cd get_jobs
 
-# 2. 放置空数据库文件（从 Release 下载 getjobs.db.template 重命名为 getjobs.db）
+# 2. 放置空数据库文件（从上游 Release 下载 getjobs.db.template 重命名为 getjobs.db）
 mkdir -p db
 # 将下载的 getjobs.db 放入 db/ 目录
 
-# 3. 启动项目后端
-./gradlew bootRun
+# 3. 构建前端并启动（Windows）
+cd front && npm install && npm run build:prod && cd ..
+powershell -File start-local.ps1
 ```
 
 ::: tip 💡 提示
-启动后访问本地管理面板，配置好个人城市、期望薪资及 AI Key，即可开启全自动投递体验。详细步骤请查看 [5分钟快速上手教程](/guide/quick-start)。
+启动后访问 <http://127.0.0.1:9527>，在各平台配置页填关键词与投递行为、完成登录，即可开启全自动投递。详细步骤请查看 [快速上手教程](/guide/quick-start)。
 :::
 
 ---
 
-## 📈 Star 增长趋势
+## 📑 文档说明
 
-感谢广大开发者与打工人们的支持与喜爱，黑暗无论多么长，光明迟早总是会来的：
-
-<p align="center" style="margin-top: 1.5rem;">
-  <a href="https://star-history.com/#loks666/get_jobs&Date" target="_blank">
-    <img src="https://api.star-history.com/svg?repos=loks666/get_jobs&type=Date" alt="Get Jobs Star History" style="max-width: 100%; border-radius: 8px;" />
-  </a>
-</p>
-
-<div style="text-align: center; margin-top: 2rem; color: var(--vp-c-text-2);">
-  <em>"每一个伟大，都有一个平凡的开始。黎明破晓之时，苦难都将化作勋章。"</em>
-</div>
-
-## 💬 与社区一起前进
-
-欢迎交流求职经验、技术问题与使用心得。
-
-- [加入 QQ 交流群](https://qm.qq.com/q/qJwmIrqPU)
-- [社区、贡献流程与赞赏支持](/guide/community)
-- [作者的其他开源项目](/guide/resources)
-- [查看更新日志](/guide/changelog)
-
-<a href="https://trendshift.io/repositories/9608"><img src="https://trendshift.io/api/badge/trendshift/repositories/9608/daily?language=Java" alt="#1 Java Repository Of The Day" height="55" /></a>
+`docs/` 目录沿自上游项目，配置与部署流程通用；本 fork 的功能差异（多平台、并发、关键词过滤、香港站）以仓库根目录 [README](../README.md) 为准。
