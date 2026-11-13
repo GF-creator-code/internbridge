@@ -27,7 +27,7 @@ interface Job51Options { jobArea: Job51Option[]; salary: Job51Option[] }
 const MAX_SALARY_SELECTIONS = 5
 
 export default function Job51Page() {
-  const API = process.env.API_BASE_URL || `${API_BASE}`
+  const API = API_BASE
   const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [isDelivering, setIsDelivering] = useState(false)
   const [checkingLogin, setCheckingLogin] = useState(true)

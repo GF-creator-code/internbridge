@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="zh-HK">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <meta name="description" content="香港及內地實習搜尋與申請記錄。A private internship tracker for Hong Kong and mainland China.">
+  <title>InternBridge · 實習工作台</title>
+  <link rel="stylesheet" href="workspace.css">
+  <script defer src="records.js"></script><script defer src="workspace.js"></script>
+</head>
+<body>
+<header><div class="bar"><a class="wordmark" href="./index.html">Intern<span>Bridge</span></a>
+<nav aria-label="Utilities"><button class="quiet" id="language" type="button">English</button><a class="quiet" href="https://github.com/GF-creator-code/internbridge">GitHub ↗</a></nav></div></header>
+<main>
+  <h1 data-t="heading">實習工作台</h1>
+  <p class="intro" data-t="intro">搜尋兩地實習，記下申請進度與下一個截止日期。</p>
+  <div class="markets">
+    <section><h2 data-t="hongkong">香港</h2><div class="links">
+      <a href="https://hk.jobsdb.com/internship-jobs" target="_blank" rel="noreferrer">JobsDB ↗</a>
+      <a href="https://www.offertoday.com/hk/scan" target="_blank" rel="noreferrer">OfferToday ↗</a></div></section>
+    <section><h2 data-t="mainland">中國內地</h2><div class="links">
+      <a href="https://www.shixiseng.com/" target="_blank" rel="noreferrer"><span data-t="sxs">實習僧</span> ↗</a>
+      <a href="https://www.zhipin.com/" target="_blank" rel="noreferrer">BOSS直聘 ↗</a></div></section>
+  </div>
+  <div class="section-title"><h2 data-t="list">申請清單</h2><button id="open-add" class="primary" data-t="add">加入職位</button></div>
+  <form id="add-form" class="panel" hidden>
+    <label><span data-t="market">職位地區</span><select name="market"><option value="hk" data-t="hongkong">香港</option><option value="cn" data-t="mainland">中國內地</option></select></label>
+    <label class="full"><span data-t="batch">職位連結，每行一個</span><textarea name="batch" rows="4" required aria-describedby="format"></textarea></label>
+    <small id="format" data-t="format">可只貼網址，或填寫「職位 | 公司 | 網址」。同一連結只會加入一次。</small>
+    <div class="actions"><button class="primary" data-t="save">儲存</button><button type="button" id="cancel-add" data-t="cancel">取消</button></div>
+  </form>
+  <div class="filters"><label><span data-t="market">職位地區</span><select id="market-filter"><option value="" data-t="allMarkets">兩地全部</option><option value="hk" data-t="hongkong">香港</option><option value="cn" data-t="mainland">中國內地</option></select></label>
+  <label><span data-t="progress">進度</span><select id="status-filter"></select></label><span id="count"></span></div>
+  <div id="listing"></div>
+  <div class="data-actions"><button id="backup" data-t="backup">匯出備份</button><button id="restore" data-t="restore">匯入備份</button><input id="file" type="file" accept=".json,application/json" hidden>
+    <a id="tools" href="https://github.com/GF-creator-code/internbridge#本機平台工具" data-t="tools">本機平台工具 ↗</a></div>
+  <details id="local-import" hidden><summary data-t="fromPlatform">從本機採集記錄加入職位</summary><div class="actions"><select id="source" aria-label="Platform"><option value="jobsdb">JobsDB</option><option value="offertoday">OfferToday</option><option value="shixiseng">實習僧</option><option value="boss">BOSS直聘</option></select><button id="pull" data-t="pull">匯入最近 50 個職位</button></div></details>
+  <footer><p data-t="storage">清單儲存在目前瀏覽器。轉用裝置或清除瀏覽資料前，請先匯出備份。</p></footer>
+</main>
+<dialog id="editor"><form id="edit-form"><h2 data-t="edit">編輯職位</h2>
+  <label><span data-t="title">職位名稱</span><input name="title" required></label>
+  <label><span data-t="company">公司</span><input name="company"></label>
+  <label><span data-t="market">職位地區</span><select name="market"><option value="hk" data-t="hongkong">香港</option><option value="cn" data-t="mainland">中國內地</option></select></label>
+  <label><span data-t="progress">進度</span><select name="status"></select></label>
+  <label><span data-t="due">申請截止日期</span><input type="date" name="due"></label>
+  <label><span data-t="resume">履歷版本或檔名</span><input name="resume"></label>
+  <label class="full"><span data-t="notes">跟進筆記</span><textarea rows="2" name="notes"></textarea></label>
+  <div class="actions full"><button class="primary" data-t="save">儲存</button><button id="cancel-edit" type="button" data-t="cancel">取消</button><button id="remove" class="danger" type="button" data-t="remove">移除</button></div>
+</form></dialog><p role="status" aria-live="polite" id="notice" hidden></p>
+</body></html>

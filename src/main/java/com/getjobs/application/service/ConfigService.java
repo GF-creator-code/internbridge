@@ -7,6 +7,7 @@ import com.getjobs.application.entity.LiepinConfigEntity;
 import com.getjobs.application.service.LiepinService;
 import com.getjobs.application.service.BossService;
 import com.getjobs.application.service.ZhilianService;
+import com.getjobs.application.service.ShixisengService;
 import com.getjobs.application.service.Job51Service;
 import com.getjobs.worker.boss.BossConfig;
 import com.getjobs.worker.job51.Job51Config;
@@ -33,7 +34,10 @@ public class ConfigService {
     private final LiepinService liepinService;
     private final BossService bossService;
     private final ZhilianService zhilianService;
+    private final ShixisengService shixisengService;
     private final Job51Service job51Service;
+    private final OfferTodayService offerTodayService;
+    private final JobsdbService jobsdbService;
 
     /**
      * 获取所有配置（以Map形式返回）
@@ -264,6 +268,16 @@ public class ConfigService {
             config.setSalary((codeByName != null && !codeByName.isEmpty()) ? codeByName : salaryCode.trim());
         }
 
+        // 通用过滤关键词（列首次为 NULL 时由 LiepinService 写入种子值）
+        if (entity != null) {
+            liepinService.seedKeywordsIfBlank(entity);
+            config.setIncludeKeywords(com.getjobs.worker.utils.KeywordFilter.parse(entity.getIncludeKeywords()));
+            config.setExcludeKeywords(com.getjobs.worker.utils.KeywordFilter.parse(entity.getExcludeKeywords()));
+        } else {
+            config.setIncludeKeywords(new java.util.ArrayList<>());
+            config.setExcludeKeywords(new java.util.ArrayList<>());
+        }
+
         return config;
     }
 
@@ -286,5 +300,26 @@ public class ConfigService {
      */
     public Job51Config getJob51Config() {
         return job51Service.loadJob51Config();
+    }
+
+    /**
+     * 统一入口：从专表 shixiseng_config 读取并构建 ShiXiSengConfig
+     */
+    public com.getjobs.worker.shixiseng.ShiXiSengConfig getShixisengConfig() {
+        return shixisengService.loadShixisengConfig();
+    }
+
+    /**
+     * 统一入口：从专表 offertoday_config 读取并构建 OfferTodayConfig
+     */
+    public com.getjobs.worker.offertoday.OfferTodayConfig getOfferTodayConfig() {
+        return offerTodayService.loadOfferTodayConfig();
+    }
+
+    /**
+     * 统一入口：从专表 jobsdb_config 读取并构建 JobsdbConfig
+     */
+    public com.getjobs.worker.jobsdb.JobsdbConfig getJobsdbConfig() {
+        return jobsdbService.loadJobsdbConfig();
     }
 }

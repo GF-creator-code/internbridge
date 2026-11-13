@@ -6,6 +6,7 @@ import com.getjobs.application.service.BossResumeImageService;
 import com.getjobs.application.service.BossService;
 import com.getjobs.worker.utils.Job;
 import com.getjobs.worker.utils.JobUtils;
+import com.getjobs.worker.utils.KeywordFilter;
 import com.getjobs.worker.utils.PlaywrightUtil;
 import com.microsoft.playwright.Frame;
 import com.microsoft.playwright.Locator;
@@ -63,6 +64,9 @@ public class Boss {
     private Supplier<Boolean> shouldStopCallback;
 
     private final List<Job> resultList = new ArrayList<>();
+
+    /** 当前关键词的岗位列表页 URL，投递过程中页面被带到聊天页时用它回来 */
+    private volatile String currentListUrl;
 
     /** Boss 首页，UI 搜索的入口 */
     private static final String BOSS_HOME_URL = "https://www.zhipin.com";
@@ -334,6 +338,7 @@ public class Boss {
                 }
 
                 // 重新获取卡片，避免元素过期
+                ensureOnJobList();
                 cards = page.locator("//ul[contains(@class, 'rec-job-list')]//li[contains(@class, 'job-card-box')]");
                 // 在点击卡片时同步等待岗位详情接口返回，随后解析并入库
                 Response detailResp = null;
@@ -434,6 +439,16 @@ public class Boss {
                 if (bossJobTitle != null && blackRecruiters != null && blackRecruiters.stream().anyMatch(bossJobTitle::contains)) {
                     String term = findMatchedTerm(blackRecruiters, bossJobTitle);
                     log.info("被过滤：招聘者黑名单命中 | 公司：{} | 岗位：{} | 招聘者：{} | 关键词：{}", bossCompany != null ? bossCompany : "", jobName != null ? jobName : "", bossJobTitle, term != null ? term : "");
+                    continue;
+                }
+                // 通用关键词过滤：必含词为空则不限标题；排除词命中标题或公司即跳过（与黑名单表互补）
+                if (!KeywordFilter.matchesInclude(jobName, config.getIncludeKeywords())) {
+                    log.info("被过滤：标题未命中必含关键词 | 公司：{} | 岗位：{}", bossCompany != null ? bossCompany : "", jobName != null ? jobName : "");
+                    continue;
+                }
+                String excludeHit = KeywordFilter.hitExcludeWord(jobName, bossCompany, config.getExcludeKeywords());
+                if (excludeHit != null) {
+                    log.info("被过滤：命中排除关键词[{}] | 公司：{} | 岗位：{}", excludeHit, bossCompany != null ? bossCompany : "", jobName != null ? jobName : "");
                     continue;
                 }
 
@@ -693,7 +708,33 @@ public class Boss {
      * 所以落地之后如果条件对不上，会再做一次同标签页跳转 —— 此时已经是热会话 + 同源 referer，
      * 和冷启动直闯不是一回事。UI 搜索任何一步失败都会退回原来的直接跳转，不影响主流程。
      */
+    /**
+     * 投递过程中页面可能被带到聊天页（发完图片简历后停在会话里），
+     * 一旦离开列表页，后面的卡片就全部取不到、被当成非实习岗空转。
+     * 每处理一张卡片前检查一次，必要时回到当前关键词的列表页。
+     */
+    private void ensureOnJobList() {
+        try {
+            String url = page.url();
+            if (url != null && url.contains("/web/geek/jobs")) {
+                return;
+            }
+            if (currentListUrl == null || currentListUrl.isBlank()) {
+                return;
+            }
+            log.info("页面已离开岗位列表（{}），返回列表页", url);
+            page.navigate(currentListUrl, new Page.NavigateOptions()
+                    .setTimeout(45_000)
+                    .setWaitUntil(com.microsoft.playwright.options.WaitUntilState.DOMCONTENTLOADED));
+            waitForPageSettled();
+            PlaywrightUtil.sleep(1);
+        } catch (Exception e) {
+            log.warn("返回岗位列表失败: {}", e.getMessage());
+        }
+    }
+
     private void openJobList(String keyword, String targetUrl, String cityCode) {
+        currentListUrl = targetUrl;
         boolean uiSearchDone = USE_UI_SEARCH && searchFromHomePage(keyword);
         if (!uiSearchDone) {
             navigateToJobList(targetUrl);

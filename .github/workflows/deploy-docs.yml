@@ -1,58 +1,33 @@
-name: Deploy Documentation
-
+name: Publish student workspace
 on:
   push:
-    branches:
-      - main
-    paths:
-      - 'docs/**'
-      - '.github/workflows/deploy-docs.yml'
+    branches: [main]
+    paths: ['front/public/workspace/**', '.github/workflows/deploy-docs.yml', 'LICENSE', 'tests/workspace.test.cjs']
   workflow_dispatch:
-
 permissions:
   contents: read
   pages: write
   id-token: write
-
 concurrency:
-  group: 'pages'
+  group: pages
   cancel-in-progress: true
-
 jobs:
   deploy:
+    runs-on: ubuntu-latest
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
-    runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
-          fetch-depth: 0
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+          node-version: 22
+      - run: node --test tests/workspace.test.cjs
+      - uses: actions/configure-pages@v5
+      - run: cp LICENSE front/public/workspace/LICENSE.txt
+      - uses: actions/upload-pages-artifact@v3
         with:
-          node-version: 20
-          cache: npm
-          cache-dependency-path: docs/package-lock.json
-
-      - name: Setup Pages
-        uses: actions/configure-pages@v5
-
-      - name: Install dependencies
-        run: npm ci
-        working-directory: docs
-
-      - name: Build with VitePress
-        run: npm run docs:build
-        working-directory: docs
-
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: docs/.vitepress/dist
-
-      - name: Deploy to GitHub Pages
+          path: front/public/workspace
+      - name: Deploy
         id: deployment
         uses: actions/deploy-pages@v4

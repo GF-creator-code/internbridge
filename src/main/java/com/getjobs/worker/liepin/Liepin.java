@@ -1,5 +1,6 @@
 package com.getjobs.worker.liepin;
 
+import com.getjobs.worker.utils.KeywordFilter;
 import com.getjobs.worker.utils.PlaywrightUtil;
 import com.getjobs.application.service.LiepinService;
 import com.getjobs.application.entity.LiepinEntity;
@@ -218,6 +219,7 @@ public class Liepin {
         return shouldStopCallback != null && Boolean.TRUE.equals(shouldStopCallback.get());
     }
 
+    /** 法律类岗位判定：命中任一关键词即跳过 */
     private void info(String msg) {
         if (progressCallback != null) {
             progressCallback.onProgress(msg, null, null);
@@ -345,10 +347,12 @@ public class Liepin {
             String companyName = null;
             String salary = null;
             String recruiterName = null;
+            String compScale = null;
             if (i < lastApiEntities.size()) {
                 LiepinEntity apiEntity = lastApiEntities.get(i);
                 jobName = safeText(apiEntity.getJobTitle());
                 companyName = safeText(apiEntity.getCompName());
+                compScale = safeText(apiEntity.getCompScale());
                 salary = safeText(apiEntity.getJobSalaryText());
                 recruiterName = safeText(apiEntity.getHrName());
             }
@@ -356,6 +360,22 @@ public class Liepin {
             if (jobName == null) jobName = "岗位";
             if (companyName == null) companyName = "公司";
             if (salary == null) salary = "";
+
+            // 通用关键词过滤：必含词为空则不限标题；排除词命中标题或公司即跳过
+            if (!KeywordFilter.matchesInclude(jobName, config.getIncludeKeywords())) {
+                log.info("被过滤（标题未命中必含关键词）：公司={} | 岗位={}", companyName, jobName);
+                continue;
+            }
+            String excludeHit = KeywordFilter.hitExcludeWord(jobName, companyName, config.getExcludeKeywords());
+            if (excludeHit != null) {
+                log.info("被过滤（命中排除关键词[{}]）：公司={} | 岗位={}", excludeHit, companyName, jobName);
+                continue;
+            }
+            // 平台侧过滤：超小公司（1-49 人）信息价值低
+            if (compScale != null && compScale.contains("1-49")) {
+                log.info("被过滤（公司过小）：公司={} | 规模={} | 岗位={}", companyName, compScale, jobName);
+                continue;
+            }
             
             try {
                 // 使用JavaScript滚动到卡片位置，更稳定

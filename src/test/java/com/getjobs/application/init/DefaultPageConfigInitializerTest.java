@@ -31,7 +31,8 @@ class DefaultPageConfigInitializerTest {
             defaults = mapper.readValue(input, new TypeReference<>() {});
         }
         for (var table : defaults.entrySet()) {
-            String columns = String.join(",", table.getValue().getFirst().keySet());
+            String columns = table.getKey().equals("boss_blacklist") ? "type,value" :
+                    String.join(",", table.getValue().getFirst().keySet());
             jdbc.execute("CREATE TABLE " + table.getKey() + " (id INTEGER PRIMARY KEY," + columns + ")");
         }
         jdbc.execute("CREATE TABLE cookie (value TEXT)");
@@ -42,9 +43,11 @@ class DefaultPageConfigInitializerTest {
     @Test
     void seedsFreshDatabaseWithoutSessionsAndDoesNotRepeatOnRestart() throws Exception {
         initializer.run();
-        assertEquals("上海", jdbc.queryForObject("SELECT city_code FROM boss_config", String.class));
-        assertTrue(jdbc.queryForObject("SELECT keywords FROM boss_config", String.class).contains("大模型"));
-        assertEquals(16, jdbc.queryForObject("SELECT COUNT(*) FROM boss_blacklist", Integer.class));
+        assertEquals("深圳", jdbc.queryForObject("SELECT city_code FROM boss_config", String.class));
+        assertTrue(jdbc.queryForObject("SELECT keywords FROM boss_config", String.class).contains("实习"));
+        assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM boss_blacklist", Integer.class));
+        assertEquals(1, jdbc.queryForObject("SELECT collect_only FROM jobsdb_config", Integer.class));
+        assertEquals("", jdbc.queryForObject("SELECT introduce FROM ai", String.class));
         assertEquals(5, jdbc.queryForObject("SELECT prompt FROM ai", String.class).split("%s", -1).length - 1);
         assertEquals("existing-session", jdbc.queryForObject("SELECT value FROM cookie", String.class));
         jdbc.update("UPDATE boss_config SET city_code='用户修改的城市'");

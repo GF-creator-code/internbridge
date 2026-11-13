@@ -290,9 +290,81 @@ public class LiepinService {
         if (config.getSalaryCode() != null) {
             existing.setSalaryCode(config.getSalaryCode());
         }
+        if (config.getIncludeKeywords() != null) {
+            existing.setIncludeKeywords(config.getIncludeKeywords());
+        }
+        if (config.getExcludeKeywords() != null) {
+            existing.setExcludeKeywords(config.getExcludeKeywords());
+        }
         existing.setUpdatedAt(LocalDateTime.now());
         liepinConfigMapper.updateById(existing);
         return existing;
+    }
+
+    /** 通用过滤关键词：列首次为 NULL 时写入种子值（必含「实习」+ 排除法务/腾讯/字节） */
+    public void seedKeywordsIfBlank(LiepinConfigEntity entity) {
+        boolean changed = false;
+        if (entity.getIncludeKeywords() == null) {
+            entity.setIncludeKeywords(com.getjobs.worker.utils.KeywordFilter.serialize(
+                    com.getjobs.worker.utils.KeywordFilter.DEFAULT_INCLUDE));
+            changed = true;
+        }
+        if (entity.getExcludeKeywords() == null) {
+            entity.setExcludeKeywords(com.getjobs.worker.utils.KeywordFilter.serialize(
+                    com.getjobs.worker.utils.KeywordFilter.DEFAULT_EXCLUDE));
+            changed = true;
+        }
+        if (changed && entity.getId() != null) {
+            LiepinConfigEntity patch = new LiepinConfigEntity();
+            patch.setId(entity.getId());
+            patch.setIncludeKeywords(entity.getIncludeKeywords());
+            patch.setExcludeKeywords(entity.getExcludeKeywords());
+            try {
+                liepinConfigMapper.updateById(patch);
+            } catch (Exception e) {
+                log.warn("写入猎聘关键词种子失败: {}", e.getMessage());
+            }
+        }
+    }
+
+    /** 为旧库补充 liepin_config 的通用过滤关键词列 */
+    @jakarta.annotation.PostConstruct
+    public void ensureLiepinConfigColumns() {
+        String createSql = "CREATE TABLE IF NOT EXISTS liepin_config (" +
+                " id INTEGER PRIMARY KEY AUTOINCREMENT," +
+                " keywords VARCHAR(500)," +
+                " city VARCHAR(100)," +
+                " salary_code VARCHAR(100)," +
+                " include_keywords TEXT," +
+                " exclude_keywords TEXT," +
+                " created_at DATETIME," +
+                " updated_at DATETIME" +
+                ")";
+        try (Connection conn = dataSource.getConnection(); Statement stmt = conn.createStatement()) {
+            stmt.execute(createSql);
+            boolean tableExists = false;
+            java.util.Set<String> names = new java.util.HashSet<>();
+            try (java.sql.ResultSet columns = stmt.executeQuery("PRAGMA table_info('liepin_config')")) {
+                while (columns.next()) {
+                    tableExists = true;
+                    names.add(columns.getString("name"));
+                }
+            }
+            if (tableExists) {
+                if (!names.contains("include_keywords")) {
+                    stmt.execute("ALTER TABLE liepin_config ADD COLUMN include_keywords TEXT");
+                }
+                if (!names.contains("exclude_keywords")) {
+                    stmt.execute("ALTER TABLE liepin_config ADD COLUMN exclude_keywords TEXT");
+                }
+            }
+            LiepinConfigEntity first = getFirstConfig();
+            if (first != null) {
+                seedKeywordsIfBlank(first);
+            }
+        } catch (Exception e) {
+            log.warn("初始化 liepin_config 过滤关键词列失败: {}", e.getMessage());
+        }
     }
 
     // ==================== Option相关方法 ====================

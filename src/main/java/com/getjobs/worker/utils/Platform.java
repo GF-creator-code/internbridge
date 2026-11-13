@@ -13,6 +13,9 @@ public enum Platform {
     LIEPIN("猎聘"),
     JOB51("前程无忧"),
     LAGOU("拉勾网"),
+    SHIXISENG("实习僧"),
+    OFFERTODAY("OfferToday"),
+    JOBSDB("JobsDB"),
     UNKNOWN("未知平台");
 
     // 获取枚举值的描述

@@ -16,8 +16,8 @@ public class CorsConfig {
     public CorsFilter corsFilter() {
         CorsConfiguration config = new CorsConfiguration();
 
-        // 允许所有域名跨域
-        config.addAllowedOriginPattern("*");
+        // The packaged UI uses the same origin; allow the local Next.js development server.
+        config.setAllowedOrigins(java.util.List.of("http://127.0.0.1:6866", "http://localhost:6866"));
 
         // 允许所有请求头
         config.addAllowedHeader("*");
