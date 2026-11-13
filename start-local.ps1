@@ -1,3 +1,4 @@
+# Start the local application with its Java and database prerequisites.
 $ErrorActionPreference = 'Stop'
 Set-Location $PSScriptRoot
 
@@ -11,9 +12,6 @@ $env:Path = "$env:JAVA_HOME/bin;$env:Path"
 $env:SERVER_ADDRESS = '127.0.0.1'
 if ($env:JAVA_TOOL_OPTIONS -notmatch 'jdk.net.unixdomain.tmpdir') {
     $env:JAVA_TOOL_OPTIONS = "$env:JAVA_TOOL_OPTIONS -Djdk.net.unixdomain.tmpdir=$env:SystemRoot\Temp".Trim()
-}
-if (-not (Test-Path 'db/getjobs.db')) {
-    throw 'Missing db/getjobs.db. Download getjobs.db.template from Releases and rename it; see README.'
 }
 & ./gradlew.bat bootRun @args
 exit $LASTEXITCODE

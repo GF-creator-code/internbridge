@@ -27,7 +27,7 @@ export default function Sidebar() {
     const check = async () => {
       if (checking) return
       setChecking(true)
-      const baseUrl = process.env.API_BASE_URL || `${API_BASE}`
+      const baseUrl = API_BASE
 
       const controller = new AbortController()
       const timeout = setTimeout(() => controller.abort(), 3000)
@@ -65,6 +65,7 @@ export default function Sidebar() {
   }, [])
 
   const envGroup = [
+    { href: '/', icon: BiBriefcase, label: '返回實習工作台', color: 'text-emerald-300' },
     { href: '/env-config', icon: BiEnvelope, label: '环境配置', color: 'text-cyan-300' },
     { href: '/ai-config', icon: BiBrain, label: 'AI配置', color: 'text-purple-300' },
   ]
@@ -96,7 +97,7 @@ export default function Sidebar() {
         <div className="flex items-center gap-3 mb-2">
           <span className="text-4xl leading-none">🍀</span>
           <div>
-            <h1 className="text-xl font-bold text-white">Get Jobs</h1>
+            <h1 className="text-xl font-bold text-white"><a href="/workspace/index.html?local">InternBridge</a></h1>
             <p className="text-white dark:text-manatee text-sm">配置管理中心</p>
           </div>
         </div>

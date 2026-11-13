@@ -5,9 +5,9 @@ spring:
     active: dev
   info:
     app:
-      name: Get Jobs
-      version: 2.0.1
-      description: https://github.com/loks666/get_jobs
+      name: InternBridge
+      version: 0.1.0
+      description: https://github.com/GF-creator-code/internbridge
   banner:
     charset: UTF-8
     location: classpath:banner.txt
@@ -26,6 +26,7 @@ spring:
 
 # 服务器配置
 server:
+  address: 127.0.0.1
   port: 9527  # 后端 API 固定端口（别用 9679：落在 Windows Hyper-V 保留段 9628-9727 里，绑不上）
 
 # 日志配置

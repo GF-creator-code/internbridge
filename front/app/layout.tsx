@@ -14,7 +14,7 @@ export default function RootLayout({
   return (
     <html lang="zh-CN" suppressHydrationWarning>
       <head>
-        <title>Get Jobs - 配置管理中心</title>
+        <title>InternBridge · 平台工具</title>
         <meta name="description" content="配置管理中心，管理application.yaml和环境变量配置" />
         <link
           rel="icon"

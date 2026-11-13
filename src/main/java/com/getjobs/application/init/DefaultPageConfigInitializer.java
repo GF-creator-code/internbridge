@@ -62,7 +62,7 @@ public class DefaultPageConfigInitializer implements CommandLineRunner {
                             + ") VALUES (" + placeholders + ")", names.stream().map(row::get).toArray());
                 }
             }
-            log.info("已加载默认页面配置（四个平台、AI内容、Boss黑名单）");
+            log.info("已加载默认页面配置（平台、AI 内容、公司筛选）");
         } else {
             log.info("检测到已有页面配置，保留用户设置，不加载项目默认值");
         }
