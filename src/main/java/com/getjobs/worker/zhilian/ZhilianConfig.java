@@ -28,16 +28,6 @@ public class ZhilianConfig {
      */
     private String salary;
 
-    /**
-     * 标题必含关键词（空 = 不限制标题）
-     */
-    private List<String> includeKeywords;
-
-    /**
-     * 排除关键词（命中标题或公司名即跳过）
-     */
-    private List<String> excludeKeywords;
-
 
     // 注意：已改为在 ZhilianJobService 中通过 ConfigService 构建配置
     // 保留空的 init 以兼容旧调用，但建议不要再使用

@@ -23,14 +23,6 @@ public class ZhilianConfigEntity {
     /** 薪资范围（中文名或代码，单值） */
     private String salary;
 
-    /** 标题必含关键词（JSON 数组字符串，空 = 不限制标题） */
-    @com.baomidou.mybatisplus.annotation.TableField("include_keywords")
-    private String includeKeywords;
-
-    /** 排除关键词（JSON 数组字符串，命中标题或公司名即跳过） */
-    @com.baomidou.mybatisplus.annotation.TableField("exclude_keywords")
-    private String excludeKeywords;
-
     /** 创建时间 */
     private LocalDateTime createdAt;
 

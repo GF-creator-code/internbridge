@@ -7,18 +7,14 @@
       "enable_ai": 0,
       "send_img_resume": 0,
       "allow_repeat_chat": 0,
-      "repeat_chat_messages": null,
-      "include_keywords": "\"[\\\"实习\\\"]\"",
-      "exclude_keywords": "[\"法务\", \"法律\", \"律师\", \"律所\", \"非诉\", \"诉讼\", \"仲裁\", \"知识产权\", \"专利\", \"腾讯\", \"字节\"]"
+      "repeat_chat_messages": null
     }
   ],
   "liepin_config": [
     {
       "keywords": "[\"大模型\",\"Python\",\"Golang\",\"Java\"]",
       "city": "上海",
-      "salary_code": "15$30",
-      "include_keywords": "\"[\\\"实习\\\"]\"",
-      "exclude_keywords": "[\"法务\", \"法律\", \"律师\", \"律所\", \"非诉\", \"诉讼\", \"仲裁\", \"知识产权\", \"专利\", \"腾讯\", \"字节\"]"
+      "salary_code": "15$30"
     }
   ],
   "job51_config": [
@@ -32,9 +28,7 @@
     {
       "keywords": "[\"大模型\",\"Java\",\"Python\",\"Golang\"]",
       "city_code": "538",
-      "salary": "35000,50000",
-      "include_keywords": "\"[\\\"实习\\\"]\"",
-      "exclude_keywords": "[\"法务\", \"法律\", \"律师\", \"律所\", \"非诉\", \"诉讼\", \"仲裁\", \"知识产权\", \"专利\", \"腾讯\", \"字节\"]"
+      "salary": "35000,50000"
     }
   ],
   "shixiseng_config": [

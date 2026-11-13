@@ -16,8 +16,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @EnableScheduling
 @EnableAsync
 public class GetJobsApplication {
-    public static void main(String[] args) throws java.io.IOException {
-        StarterDatabase.install(java.nio.file.Path.of("db", "getjobs.db"));
+    public static void main(String[] args) {
         SpringApplication.run(GetJobsApplication.class, args);
     }
 }

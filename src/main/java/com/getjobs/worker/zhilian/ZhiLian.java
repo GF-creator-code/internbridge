@@ -3,7 +3,6 @@ package com.getjobs.worker.zhilian;
 import com.getjobs.application.entity.ZhilianJobDataEntity;
 import com.getjobs.application.service.ZhilianService;
 import com.getjobs.worker.utils.Job;
-import com.getjobs.worker.utils.KeywordFilter;
 import com.getjobs.worker.utils.PlaywrightUtil;
 import com.microsoft.playwright.Locator;
 import com.microsoft.playwright.Page;
@@ -219,18 +218,34 @@ public class ZhiLian {
         return jobs;
     }
 
-    /** 通用关键词过滤：必含词为空则不限标题；排除词命中标题或公司即跳过 */
+    /** 只投实习岗；避开法律岗；避开腾讯/字节 */
     private boolean isDeliverable(PageJob pj) {
-        if (!KeywordFilter.matchesInclude(pj.jobTitle, config.getIncludeKeywords())) {
-            log.info("被过滤（标题未命中必含关键词）：{} | {}", pj.companyName, pj.jobTitle);
+        if (pj.jobTitle == null || !pj.jobTitle.contains("实习")) {
+            log.info("被过滤（非实习岗）：{} | {}", pj.companyName, pj.jobTitle);
             return false;
         }
-        String excludeHit = KeywordFilter.hitExcludeWord(pj.jobTitle, pj.companyName, config.getExcludeKeywords());
-        if (excludeHit != null) {
-            log.info("被过滤（命中排除关键词[{}]）：{} | {}", excludeHit, pj.companyName, pj.jobTitle);
+        if (isLegal(pj.jobTitle) || isLegal(pj.companyName)) {
+            log.info("被过滤（法律岗）：{} | {}", pj.companyName, pj.jobTitle);
+            return false;
+        }
+        if (pj.companyName != null && (pj.companyName.contains("腾讯") || pj.companyName.contains("字节"))) {
+            log.info("被过滤（硬性排除）：{} | {}", pj.companyName, pj.jobTitle);
             return false;
         }
         return true;
+    }
+
+    private boolean isLegal(String text) {
+        if (text == null || text.isBlank()) {
+            return false;
+        }
+        String[] terms = {"法务", "法律", "律师", "律所", "非诉", "诉讼", "仲裁", "知识产权", "专利"};
+        for (String t : terms) {
+            if (text.contains(t)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private void deliverOne(PageJob pj) {

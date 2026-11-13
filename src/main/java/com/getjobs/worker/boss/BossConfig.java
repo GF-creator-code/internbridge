@@ -123,14 +123,4 @@ public class BossConfig {
      * HR未上线状态
      */
     private List<String> deadStatus;
-
-    /**
-     * 标题必含关键词（空 = 不限制标题）
-     */
-    private List<String> includeKeywords;
-
-    /**
-     * 排除关键词（命中标题或公司名即跳过；与职位/公司黑名单表互补）
-     */
-    private List<String> excludeKeywords;
 }

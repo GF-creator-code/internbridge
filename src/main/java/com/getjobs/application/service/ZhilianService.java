@@ -39,72 +39,6 @@ public class ZhilianService {
         return zhilianConfigMapper.selectOne(wrapper);
     }
 
-    /** 通用过滤关键词：列首次为 NULL 时写入种子值（必含「实习」+ 排除法务/腾讯/字节） */
-    private void seedKeywordsIfBlank(ZhilianConfigEntity entity) {
-        boolean changed = false;
-        if (entity.getIncludeKeywords() == null) {
-            entity.setIncludeKeywords(com.getjobs.worker.utils.KeywordFilter.serialize(
-                    com.getjobs.worker.utils.KeywordFilter.DEFAULT_INCLUDE));
-            changed = true;
-        }
-        if (entity.getExcludeKeywords() == null) {
-            entity.setExcludeKeywords(com.getjobs.worker.utils.KeywordFilter.serialize(
-                    com.getjobs.worker.utils.KeywordFilter.DEFAULT_EXCLUDE));
-            changed = true;
-        }
-        if (changed && entity.getId() != null) {
-            ZhilianConfigEntity patch = new ZhilianConfigEntity();
-            patch.setId(entity.getId());
-            patch.setIncludeKeywords(entity.getIncludeKeywords());
-            patch.setExcludeKeywords(entity.getExcludeKeywords());
-            try {
-                zhilianConfigMapper.updateById(patch);
-            } catch (Exception e) {
-                log.warn("写入智联关键词种子失败: {}", e.getMessage());
-            }
-        }
-    }
-
-    /** 为旧库补充 zhilian_config 的通用过滤关键词列 */
-    @PostConstruct
-    public void ensureZhilianConfigColumns() {
-        String createSql = "CREATE TABLE IF NOT EXISTS zhilian_config (" +
-                " id INTEGER PRIMARY KEY AUTOINCREMENT," +
-                " keywords VARCHAR(500)," +
-                " city_code VARCHAR(100)," +
-                " salary VARCHAR(100)," +
-                " include_keywords TEXT," +
-                " exclude_keywords TEXT," +
-                " created_at DATETIME," +
-                " updated_at DATETIME" +
-                ")";
-        try (Connection conn = dataSource.getConnection(); Statement stmt = conn.createStatement()) {
-            stmt.execute(createSql);
-            boolean tableExists = false;
-            java.util.Set<String> names = new java.util.HashSet<>();
-            try (java.sql.ResultSet columns = stmt.executeQuery("PRAGMA table_info('zhilian_config')")) {
-                while (columns.next()) {
-                    tableExists = true;
-                    names.add(columns.getString("name"));
-                }
-            }
-            if (tableExists) {
-                if (!names.contains("include_keywords")) {
-                    stmt.execute("ALTER TABLE zhilian_config ADD COLUMN include_keywords TEXT");
-                }
-                if (!names.contains("exclude_keywords")) {
-                    stmt.execute("ALTER TABLE zhilian_config ADD COLUMN exclude_keywords TEXT");
-                }
-            }
-            ZhilianConfigEntity first = getFirstConfig();
-            if (first != null) {
-                seedKeywordsIfBlank(first);
-            }
-        } catch (Exception e) {
-            log.warn("初始化 zhilian_config 过滤关键词列失败: {}", e.getMessage());
-        }
-    }
-
     /** 从专表构建 ZhilianConfig */
     public ZhilianConfig loadZhilianConfig() {
         ZhilianConfigEntity entity = getFirstConfig();
@@ -114,18 +48,11 @@ public class ZhilianService {
             config.setKeywords(new ArrayList<>());
             config.setCityCode("0");
             config.setSalary("0");
-            config.setIncludeKeywords(new ArrayList<>(com.getjobs.worker.utils.KeywordFilter.DEFAULT_INCLUDE));
-            config.setExcludeKeywords(new ArrayList<>(com.getjobs.worker.utils.KeywordFilter.DEFAULT_EXCLUDE));
             return config;
         }
 
         // 关键词解析：支持逗号或括号列表
         config.setKeywords(parseListString(entity.getKeywords()));
-
-        // 通用过滤关键词（含一次性种子迁移）
-        seedKeywordsIfBlank(entity);
-        config.setIncludeKeywords(com.getjobs.worker.utils.KeywordFilter.parse(entity.getIncludeKeywords()));
-        config.setExcludeKeywords(com.getjobs.worker.utils.KeywordFilter.parse(entity.getExcludeKeywords()));
 
         // 城市：中文名映射到代码；缺省或“不限”映射为 0
         String city = safeTrim(entity.getCityCode());
@@ -200,8 +127,6 @@ public class ZhilianService {
             toInsert.setKeywords(incoming.getKeywords());
             toInsert.setCityCode(incoming.getCityCode());
             toInsert.setSalary(incoming.getSalary());
-            toInsert.setIncludeKeywords(incoming.getIncludeKeywords());
-            toInsert.setExcludeKeywords(incoming.getExcludeKeywords());
             toInsert.setCreatedAt(now);
             toInsert.setUpdatedAt(now);
             zhilianConfigMapper.insert(toInsert);
@@ -212,8 +137,6 @@ public class ZhilianService {
             if (incoming.getKeywords() != null) toUpdate.setKeywords(incoming.getKeywords());
             if (incoming.getCityCode() != null) toUpdate.setCityCode(incoming.getCityCode());
             if (incoming.getSalary() != null) toUpdate.setSalary(incoming.getSalary());
-            if (incoming.getIncludeKeywords() != null) toUpdate.setIncludeKeywords(incoming.getIncludeKeywords());
-            if (incoming.getExcludeKeywords() != null) toUpdate.setExcludeKeywords(incoming.getExcludeKeywords());
             toUpdate.setCreatedAt(first.getCreatedAt());
             toUpdate.setUpdatedAt(now);
             zhilianConfigMapper.updateById(toUpdate);

@@ -14,7 +14,6 @@ import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import PageHeader from '@/app/components/PageHeader'
-import { parseKeywordList, serializeKeywordList } from '@/app/components/KeywordListsField'
 import AnalysisContent from '@/app/boss/analysis/AnalysisContent'
 import { API_BASE } from '@/lib/api'
 
@@ -38,8 +37,6 @@ interface BossConfig {
   repeatChatMessages?: string
   filterDeadHr?: number
   deadStatus?: string
-  includeKeywords?: string
-  excludeKeywords?: string
 }
 
 interface BossOption {
@@ -241,8 +238,6 @@ export default function BossPage() {
           repeatChatMessages: data.config.repeatChatMessages ?? '',
           cityCode: normalizeCityCode(data.config.cityCode),
           jobType: normalizeJobType(data.config.jobType),
-          includeKeywords: parseKeywordList(data.config.includeKeywords),
-          excludeKeywords: parseKeywordList(data.config.excludeKeywords),
           // 没有图片时不能保留开启状态，否则开关会处于“开启但不可用”。
           sendImgResume: fetchedResumeImage.exists ? (data.config.sendImgResume ?? 0) : 0,
         })
@@ -434,8 +429,6 @@ export default function BossPage() {
         ...(overrides || {}),
         // 关键词：前端发送逗号分隔的纯文本，后端统一组装为 JSON 列表
         keywords: keywordsDisplay,
-        includeKeywords: serializeKeywordList(config.includeKeywords),
-        excludeKeywords: serializeKeywordList(config.excludeKeywords),
         industry: toBracketList(selectedIndustry),
         experience: toBracketList(selectedExperience),
         degree: toBracketList(selectedDegree),
@@ -901,28 +894,6 @@ export default function BossPage() {
                     placeholder="例如：Java开发工程师"
                   />
                   <p className="text-xs text-muted-foreground">职位搜索的关键词</p>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="includeKeywords">标题必含关键词</Label>
-                  <Input
-                    id="includeKeywords"
-                    value={config.includeKeywords || ''}
-                    onChange={(e) => setConfig({ ...config, includeKeywords: e.target.value })}
-                    placeholder="如：实习（留空不限制）"
-                  />
-                  <p className="text-xs text-muted-foreground">岗位标题须包含其中之一才会投递</p>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="excludeKeywords">排除关键词</Label>
-                  <Input
-                    id="excludeKeywords"
-                    value={config.excludeKeywords || ''}
-                    onChange={(e) => setConfig({ ...config, excludeKeywords: e.target.value })}
-                    placeholder="如：法务, 律师, 腾讯, 字节"
-                  />
-                  <p className="text-xs text-muted-foreground">标题或公司命中即跳过（与黑名单互补）</p>
                 </div>
 
                 <div className="space-y-2">

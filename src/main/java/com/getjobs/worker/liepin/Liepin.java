@@ -1,6 +1,5 @@
 package com.getjobs.worker.liepin;
 
-import com.getjobs.worker.utils.KeywordFilter;
 import com.getjobs.worker.utils.PlaywrightUtil;
 import com.getjobs.application.service.LiepinService;
 import com.getjobs.application.entity.LiepinEntity;
@@ -220,6 +219,19 @@ public class Liepin {
     }
 
     /** 法律类岗位判定：命中任一关键词即跳过 */
+    private boolean isLegalJob(String text) {
+        if (text == null || text.isBlank()) {
+            return false;
+        }
+        String[] terms = {"法务", "法律", "律师", "律所", "非诉", "诉讼", "仲裁", "知识产权", "专利"};
+        for (String t : terms) {
+            if (text.contains(t)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private void info(String msg) {
         if (progressCallback != null) {
             progressCallback.onProgress(msg, null, null);
@@ -361,17 +373,15 @@ public class Liepin {
             if (companyName == null) companyName = "公司";
             if (salary == null) salary = "";
 
-            // 通用关键词过滤：必含词为空则不限标题；排除词命中标题或公司即跳过
-            if (!KeywordFilter.matchesInclude(jobName, config.getIncludeKeywords())) {
-                log.info("被过滤（标题未命中必含关键词）：公司={} | 岗位={}", companyName, jobName);
+            // 只投实习岗；避开法律岗、腾讯/字节、超小公司（1-49 人）
+            if (!jobName.contains("实习") || isLegalJob(jobName) || isLegalJob(companyName)) {
+                log.info("被过滤（非实习/法律岗）：公司={} | 岗位={}", companyName, jobName);
                 continue;
             }
-            String excludeHit = KeywordFilter.hitExcludeWord(jobName, companyName, config.getExcludeKeywords());
-            if (excludeHit != null) {
-                log.info("被过滤（命中排除关键词[{}]）：公司={} | 岗位={}", excludeHit, companyName, jobName);
+            if (companyName.contains("腾讯") || companyName.contains("字节")) {
+                log.info("被过滤（硬性排除）：公司={} | 岗位={}", companyName, jobName);
                 continue;
             }
-            // 平台侧过滤：超小公司（1-49 人）信息价值低
             if (compScale != null && compScale.contains("1-49")) {
                 log.info("被过滤（公司过小）：公司={} | 规模={} | 岗位={}", companyName, compScale, jobName);
                 continue;
