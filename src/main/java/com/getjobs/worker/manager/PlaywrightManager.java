@@ -1190,6 +1190,8 @@ public class PlaywrightManager {
      * 触发 51job 登录流程：打开登录页并点击“微信扫码登录”按钮
      */
     public void trigger51jobLogin() {
+        // 共享浏览器默认不再随服务启动：点「登录」时在此处自举并弹窗
+        init();
         try {
             if (job51Page == null) {
                 if (context == null) {
@@ -1466,6 +1468,8 @@ public class PlaywrightManager {
      * 监控检测到登录成功后自动保存 Cookie。
      */
     public void triggerShixisengLogin() {
+        // 共享浏览器默认不再随服务启动：点「登录」时在此处自举并弹窗
+        init();
         try {
             if (shixisengPage == null) {
                 throw new IllegalStateException("实习僧页面未初始化");
@@ -1686,6 +1690,10 @@ public class PlaywrightManager {
      */
     public void triggerOfferTodayLogin() {
         callOnPlaywright(() -> {
+            if (!isInitialized()) {
+                // 共享浏览器默认不再随服务启动：点「登录」时在此处自举并弹窗
+                initInternal();
+            }
             doTriggerOfferTodayLogin();
             return null;
         });
@@ -1966,6 +1974,10 @@ public class PlaywrightManager {
      */
     public void triggerJobsdbLogin() {
         callOnPlaywright(() -> {
+            if (!isInitialized()) {
+                // 共享浏览器默认不再随服务启动：点「登录」时在此处自举并弹窗
+                initInternal();
+            }
             doTriggerJobsdbLogin();
             return null;
         });
@@ -2259,6 +2271,8 @@ public class PlaywrightManager {
      * 主动触发智联招聘登录：点击二维码入口并等待登录成功跳转
      */
     public void triggerZhilianLogin() {
+        // 共享浏览器默认不再随服务启动：点「登录」时在此处自举并弹窗
+        init();
         try {
             if (zhilianPage == null) {
                 throw new IllegalStateException("智联招聘页面未初始化");

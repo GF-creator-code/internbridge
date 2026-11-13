@@ -27,7 +27,12 @@ public class StartupRunner implements ApplicationRunner {
     @Value("${internbridge.open-dashboard:true}")
     private boolean openDashboard;
 
-    @Value("${internbridge.open-platforms:true}")
+    /**
+     * 是否在启动时初始化共享自动化浏览器（会弹出一个 Chrome 窗口）。
+     * 默认关闭：投递任务全走各平台独立的任务浏览器（PlatformTaskBrowser），
+     * 共享浏览器只在需要扫码/账密登录（平台页点「登录」会自行拉起）或预检时才需要。
+     */
+    @Value("${internbridge.open-platforms:false}")
     private boolean openPlatforms;
 
     @Override

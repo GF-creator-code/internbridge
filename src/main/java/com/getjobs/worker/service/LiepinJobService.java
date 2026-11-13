@@ -1,6 +1,7 @@
 package com.getjobs.worker.service;
 
 import com.getjobs.application.service.ConfigService;
+import com.getjobs.application.service.CookieService;
 import com.getjobs.worker.dto.JobProgressMessage;
 import com.getjobs.worker.liepin.Liepin;
 import com.getjobs.worker.liepin.LiepinConfig;
@@ -30,6 +31,7 @@ public class LiepinJobService implements JobPlatformService {
 
     private final PlaywrightManager playwrightManager;
     private final ConfigService configService;
+    private final CookieService cookieService;
     private final ObjectProvider<Liepin> liepinProvider;
 
     // 运行状态标志
@@ -47,20 +49,21 @@ public class LiepinJobService implements JobPlatformService {
 
         try {
             // 浏览器可能已被手动关闭 / 崩溃，先确保可用，必要时重新拉起
-            progressCallback.accept(JobProgressMessage.info(PLATFORM, "检查浏览器状态..."));
-            playwrightManager.ensureReady();
+            progressCallback.accept(JobProgressMessage.info(PLATFORM, "检查登录态（Cookie 表）..."));
 
-            Page page = playwrightManager.getLiepinPage();
-            if (page == null) {
-                progressCallback.accept(JobProgressMessage.error(PLATFORM, "猎聘页面未初始化"));
+            // 投递任务全走任务浏览器（PlatformTaskBrowser），共享浏览器不再为此拉起。
+            // Cookie 表有记录就放行，真正登录验证由任务浏览器的预热 / worker 内部处理。
+            boolean hasLoginCookie = false;
+            try {
+                var loginCookie = cookieService.getCookieByPlatform(PLATFORM);
+                hasLoginCookie = loginCookie != null && loginCookie.getCookieValue() != null
+                        && !loginCookie.getCookieValue().isBlank();
+            } catch (Exception ignored) {
+            }
+            if (!hasLoginCookie) {
+                progressCallback.accept(JobProgressMessage.error(PLATFORM, "请先登录猎聘（Cookie 表无登录态）"));
                 return;
             }
-
-            if (!playwrightManager.isLoggedIn(PLATFORM)) {
-                progressCallback.accept(JobProgressMessage.error(PLATFORM, "请先登录猎聘"));
-                return;
-            }
-
             isRunning = true;
             shouldStop = false;
 
@@ -83,7 +86,6 @@ public class LiepinJobService implements JobPlatformService {
             };
 
             Liepin liepin = liepinProvider.getObject();
-            liepin.setPage(page);
             liepin.setConfig(config);
             liepin.setProgressCallback(cb);
             liepin.setShouldStopCallback(this::shouldStop);

@@ -1,6 +1,7 @@
 package com.getjobs.worker.service;
 
 import com.getjobs.application.service.ConfigService;
+import com.getjobs.application.service.CookieService;
 import com.getjobs.worker.dto.JobProgressMessage;
 import com.getjobs.worker.manager.PlaywrightManager;
 import com.getjobs.worker.manager.PlatformTaskBrowser;
@@ -30,6 +31,7 @@ public class ZhilianJobService implements JobPlatformService {
     private final PlatformTaskBrowser platformTaskBrowser;
     private final ObjectProvider<ZhiLian> zhilianProvider;
     private final ConfigService configService;
+    private final CookieService cookieService;
 
     // 任务运行状态
     private volatile boolean isRunning = false;
@@ -45,22 +47,21 @@ public class ZhilianJobService implements JobPlatformService {
 
         try {
             // 浏览器可能已被手动关闭 / 崩溃，先确保可用，必要时重新拉起
-            progressCallback.accept(JobProgressMessage.info(PLATFORM, "检查浏览器状态..."));
-            playwrightManager.ensureReady();
+            progressCallback.accept(JobProgressMessage.info(PLATFORM, "检查登录态（Cookie 表）..."));
 
-            // 获取智联招聘页面实例
-            Page page = playwrightManager.getZhilianPage();
-            if (page == null) {
-                progressCallback.accept(JobProgressMessage.error(PLATFORM, "智联招聘页面未初始化"));
+            // 投递任务全走任务浏览器（PlatformTaskBrowser），共享浏览器不再为此拉起。
+            // Cookie 表有记录就放行，真正登录验证由任务浏览器的预热 / worker 内部处理。
+            boolean hasLoginCookie = false;
+            try {
+                var loginCookie = cookieService.getCookieByPlatform(PLATFORM);
+                hasLoginCookie = loginCookie != null && loginCookie.getCookieValue() != null
+                        && !loginCookie.getCookieValue().isBlank();
+            } catch (Exception ignored) {
+            }
+            if (!hasLoginCookie) {
+                progressCallback.accept(JobProgressMessage.error(PLATFORM, "请先登录智联招聘（Cookie 表无登录态）"));
                 return;
             }
-
-            // 检查是否已登录
-            if (!playwrightManager.isLoggedIn(PLATFORM)) {
-                progressCallback.accept(JobProgressMessage.error(PLATFORM, "请先登录智联招聘"));
-                return;
-            }
-
             // 通过校验后再标记运行
             isRunning = true;
             shouldStop = false;
@@ -84,7 +85,6 @@ public class ZhilianJobService implements JobPlatformService {
             };
 
             ZhiLian zhilian = zhilianProvider.getObject();
-            zhilian.setPage(page);
             zhilian.setConfig(config);
             zhilian.setProgressCallback(zhilianCallback);
             zhilian.setShouldStopCallback(this::shouldStop);

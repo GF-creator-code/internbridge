@@ -43,24 +43,17 @@ public class JobsdbJobService implements JobPlatformService {
         }
 
         try {
-            progressCallback.accept(JobProgressMessage.info(PLATFORM, "检查浏览器状态..."));
-            playwrightManager.ensureReady();
+            progressCallback.accept(JobProgressMessage.info(PLATFORM, "检查登录态（Cookie 表）..."));
 
-            Page page = playwrightManager.getJobsdbPage();
-            if (page == null) {
-                progressCallback.accept(JobProgressMessage.error(PLATFORM, "JobsDB 页面未初始化"));
-                return;
-            }
-
-            // 共享浏览器的页面可能被 Cloudflare 拦住，但任务浏览器有自己的持久化 profile；
-            // 只要 cookie 表里有 JobsDB 登录态就继续尝试，让任务浏览器自己去验证。
+            // 投递任务全走任务浏览器（PlatformTaskBrowser），共享浏览器不再为此拉起；
+            // 任务浏览器有自己的持久化 profile，由 warmUp 处理 Cloudflare 与登录验证。
             boolean hasCookie = false;
             try {
                 var cookie = cookieService.getCookieByPlatform(PLATFORM);
                 hasCookie = cookie != null && cookie.getCookieValue() != null && !cookie.getCookieValue().isBlank();
             } catch (Exception ignored) {
             }
-            if (!playwrightManager.isLoggedIn(PLATFORM) && !hasCookie) {
+            if (!hasCookie) {
                 progressCallback.accept(JobProgressMessage.error(PLATFORM, "请先登录 JobsDB"));
                 return;
             }
@@ -82,7 +75,6 @@ public class JobsdbJobService implements JobPlatformService {
             };
 
             Jobsdb jobsdb = jobsdbProvider.getObject();
-            jobsdb.setPage(page);
             jobsdb.setConfig(config);
             jobsdb.setProgressCallback(callback);
             jobsdb.setShouldStopCallback(this::shouldStop);

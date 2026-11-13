@@ -1,6 +1,7 @@
 package com.getjobs.worker.service;
 
 import com.getjobs.application.service.ConfigService;
+import com.getjobs.application.service.CookieService;
 import com.getjobs.worker.boss.Boss;
 import com.getjobs.worker.boss.BossConfig;
 import com.getjobs.worker.dto.JobProgressMessage;
@@ -29,6 +30,7 @@ public class BossJobService implements JobPlatformService {
     private final PlaywrightManager playwrightManager;
     private final PlatformTaskBrowser platformTaskBrowser;
     private final ConfigService configService;
+    private final CookieService cookieService;
     private final ObjectProvider<Boss> bossProvider;
 
     // 任务运行状态
@@ -48,22 +50,21 @@ public class BossJobService implements JobPlatformService {
         try {
             // 浏览器可能已经被关掉（手动关窗口 / Chrome 崩溃），这时各字段仍非空，
             // 但每个操作都会抛 TargetClosedError。先确保浏览器可用，必要时重新拉起。
-            progressCallback.accept(JobProgressMessage.info(PLATFORM, "检查浏览器状态..."));
-            playwrightManager.ensureReady();
+            progressCallback.accept(JobProgressMessage.info(PLATFORM, "检查登录态（Cookie 表）..."));
 
-            // 获取Boss页面实例
-            Page page = playwrightManager.getBossPage();
-            if (page == null) {
-                progressCallback.accept(JobProgressMessage.error(PLATFORM, "Boss页面未初始化"));
+            // 投递任务全走任务浏览器（PlatformTaskBrowser），共享浏览器不再为此拉起。
+            // Cookie 表有记录就放行，真正登录验证由任务浏览器的预热 / worker 内部处理。
+            boolean hasLoginCookie = false;
+            try {
+                var loginCookie = cookieService.getCookieByPlatform(PLATFORM);
+                hasLoginCookie = loginCookie != null && loginCookie.getCookieValue() != null
+                        && !loginCookie.getCookieValue().isBlank();
+            } catch (Exception ignored) {
+            }
+            if (!hasLoginCookie) {
+                progressCallback.accept(JobProgressMessage.error(PLATFORM, "请先登录Boss直聘（Cookie 表无登录态）"));
                 return;
             }
-
-            // 检查是否已登录
-            if (!playwrightManager.isLoggedIn(PLATFORM)) {
-                progressCallback.accept(JobProgressMessage.error(PLATFORM, "请先登录Boss直聘"));
-                return;
-            }
-
             // 通过校验后再标记运行
             isRunning = true;
             shouldStop = false;
@@ -88,7 +89,6 @@ public class BossJobService implements JobPlatformService {
             };
 
             Boss boss = bossProvider.getObject();
-            boss.setPage(page);
             boss.setConfig(config);
             boss.setProgressCallback(bossCallback);
             boss.setShouldStopCallback(this::shouldStop);

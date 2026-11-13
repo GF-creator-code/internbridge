@@ -39,6 +39,13 @@ public class PlatformTaskBrowser {
 
     private final CookieService cookieService;
 
+    /**
+     * 任务浏览器窗口位置：offscreen = 移到屏幕外（默认，减少桌面窗口堆积，
+     * 需要人工扫码时从任务栏点 Chrome 图标调出）；normal = 正常最大化显示。
+     */
+    @org.springframework.beans.factory.annotation.Value("${internbridge.task-window:offscreen}")
+    private String taskWindowMode;
+
     private final Map<String, Runner> runners = new ConcurrentHashMap<>();
 
     private static class Runner {
@@ -137,29 +144,36 @@ public class PlatformTaskBrowser {
             runner.playwright = Playwright.create();
         }
         Path userDataDir = Paths.get(System.getProperty("user.dir"), "browser-data-tasks", runner.platform);
+        boolean offscreen = !"normal".equalsIgnoreCase(taskWindowMode);
+        List<String> launchArgs = new ArrayList<>(List.of(
+                "--test-type",
+                "--disable-session-crashed-bubble",
+                "--hide-crash-restore-bubble",
+                "--no-first-run",
+                "--no-default-browser-check",
+                "--no-proxy-server",
+                "--proxy-bypass-list=*",
+                "--disable-blink-features=AutomationControlled"));
+        if (offscreen) {
+            // headful 但移出屏幕：不触发无头检测，又不在桌面堆窗口；扫码时从任务栏点图标调出
+            launchArgs.add("--window-position=-32000,-32000");
+            launchArgs.add("--window-size=1680,1050");
+        } else {
+            launchArgs.add("--start-maximized");
+        }
         runner.context = runner.playwright.chromium().launchPersistentContext(userDataDir,
                 new BrowserType.LaunchPersistentContextOptions()
                         .setChannel("chrome")
                         .setHeadless(false)
                         .setSlowMo(30)
                         .setViewportSize(null)
-                        .setArgs(List.of(
-                                "--start-maximized",
-                                "--test-type",
-                                "--disable-session-crashed-bubble",
-                                "--hide-crash-restore-bubble",
-                                "--no-first-run",
-                                "--no-default-browser-check",
-                                "--no-proxy-server",
-                                "--proxy-bypass-list=*",
-                                "--disable-blink-features=AutomationControlled"
-                        )));
+                        .setArgs(launchArgs));
         List<Page> pages = runner.context.pages();
         runner.page = pages.isEmpty() ? runner.context.newPage() : pages.get(0);
         runner.page.setDefaultTimeout(30_000);
         boolean warmedUp = warmUp(runner);
         if (!warmedUp) {
-            throw new IllegalStateException("平台 " + runner.platform + " 需要先完成登录/安全验证，请在弹出的任务浏览器窗口操作");
+            throw new IllegalStateException("平台 " + runner.platform + " 需要先完成登录/安全验证：任务窗口已移至屏幕外，请从任务栏点击 Chrome 图标调出窗口操作");
         }
         log.info("平台任务浏览器已启动: {} ({})", runner.platform, userDataDir);
     }
@@ -196,7 +210,7 @@ public class PlatformTaskBrowser {
                 log.debug("JobsDB 预热检查失败: {}", e.getMessage());
             }
         }
-        log.warn("JobsDB 任务浏览器 60 秒内未通过安全验证，请在 task-jobsdb 窗口手动完成");
+        log.warn("JobsDB 任务浏览器 60 秒内未通过安全验证：窗口已移至屏幕外，请从任务栏点击 Chrome 图标调出窗口手动完成");
         return false;
     }
 
@@ -213,7 +227,7 @@ public class PlatformTaskBrowser {
             Object text = runner.page.evaluate("() => document.body.innerText");
             String t = text == null ? "" : text.toString();
             if (t.contains("登录/注册")) {
-                log.warn("Boss 任务浏览器未登录，请在弹出的 task-boss Chrome 窗口扫码登录一次");
+                log.warn("Boss 任务浏览器未登录：任务窗口已移至屏幕外，请从任务栏点击 Chrome 图标调出窗口扫码登录一次");
                 runner.page.navigate("https://www.zhipin.com/web/user/?ka=header-login",
                         new Page.NavigateOptions().setTimeout(45_000)
                                 .setWaitUntil(com.microsoft.playwright.options.WaitUntilState.DOMCONTENTLOADED));

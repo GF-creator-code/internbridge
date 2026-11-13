@@ -80,6 +80,16 @@ export default function Sidebar() {
   { href: '/jobsdb', icon: BiBriefcase, label: 'JobsDB', color: 'text-violet-300' },
   ]
 
+  const dashboardGroup = [
+    { href: '/workspace/index.html?local', icon: BiBriefcase, label: '投递追踪工作台', color: 'text-emerald-300' },
+    { href: '/boss/analysis', icon: BiBriefcase, label: 'Boss 投递分析', color: 'text-indigo-300' },
+    { href: '/shixiseng/analysis', icon: BiBriefcase, label: '实习僧投递分析', color: 'text-emerald-300' },
+    { href: '/zhilian/analysis', icon: BiBriefcase, label: '智联投递分析', color: 'text-cyan-300' },
+    { href: '/liepin/analysis', icon: BiSearch, label: '猎聘投递分析', color: 'text-purple-300' },
+    { href: '/offertoday/analysis', icon: BiBriefcase, label: 'OfferToday 分析', color: 'text-sky-300' },
+    { href: '/jobsdb/analysis', icon: BiBriefcase, label: 'JobsDB 分析', color: 'text-violet-300' },
+  ]
+
   return (
     <motion.div
       initial={{ x: -100, opacity: 0 }}
@@ -221,6 +231,38 @@ export default function Sidebar() {
                         <div className="w-2 h-2 bg-cyan-300 rounded-full animate-pulse"></div>
                       </div>
                     )}
+                  </Link>
+                </motion.div>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* 数据看板分组 */}
+        <div>
+          <div className="px-4 py-2 text-white dark:text-waterloo text-xs uppercase tracking-wide">数据看板</div>
+          <div className="space-y-2">
+            {dashboardGroup.map((item, index) => {
+              const Icon = item.icon
+              const isActive = pathname === item.href
+              return (
+                <motion.div
+                  key={item.href}
+                  initial={{ x: -20, opacity: 0 }}
+                  animate={{ x: 0, opacity: 1 }}
+                  transition={{ delay: 0.1 * index + 0.3, duration: 0.3 }}
+                >
+                  <Link
+                    href={item.href}
+                    className={`
+                      group flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300
+                      ${isActive
+                        ? 'bg-white/25 dark:bg-white/5 text-white shadow-solid-3 backdrop-blur-sm border-l-4 border-cyan-300'
+                        : 'text-white dark:text-manatee hover:bg-white/15 dark:hover:bg-white/5 hover:translate-x-1'
+                      }`}
+                  >
+                    <Icon className={`text-xl ${item.color}`} />
+                    <span className="text-sm font-medium">{item.label}</span>
                   </Link>
                 </motion.div>
               )

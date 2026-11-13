@@ -1,6 +1,7 @@
 package com.getjobs.worker.service;
 
 import com.getjobs.application.service.ConfigService;
+import com.getjobs.application.service.CookieService;
 import com.getjobs.worker.dto.JobProgressMessage;
 import com.getjobs.worker.job51.Job51;
 import com.getjobs.worker.job51.Job51Config;
@@ -28,6 +29,7 @@ public class Job51JobService implements JobPlatformService {
     private final PlaywrightManager playwrightManager;
     private final ObjectProvider<Job51> job51Provider;
     private final ConfigService configService;
+    private final CookieService cookieService;
 
     // 任务运行状态
     private volatile boolean isRunning = false;
@@ -43,22 +45,21 @@ public class Job51JobService implements JobPlatformService {
 
         try {
             // 浏览器可能已被手动关闭 / 崩溃，先确保可用，必要时重新拉起
-            progressCallback.accept(JobProgressMessage.info(PLATFORM, "检查浏览器状态..."));
-            playwrightManager.ensureReady();
+            progressCallback.accept(JobProgressMessage.info(PLATFORM, "检查登录态（Cookie 表）..."));
 
-            // 获取51job页面实例
-            Page page = playwrightManager.getJob51Page();
-            if (page == null) {
-                progressCallback.accept(JobProgressMessage.error(PLATFORM, "51job页面未初始化"));
+            // 投递任务全走任务浏览器（PlatformTaskBrowser），共享浏览器不再为此拉起。
+            // Cookie 表有记录就放行，真正登录验证由任务浏览器的预热 / worker 内部处理。
+            boolean hasLoginCookie = false;
+            try {
+                var loginCookie = cookieService.getCookieByPlatform(PLATFORM);
+                hasLoginCookie = loginCookie != null && loginCookie.getCookieValue() != null
+                        && !loginCookie.getCookieValue().isBlank();
+            } catch (Exception ignored) {
+            }
+            if (!hasLoginCookie) {
+                progressCallback.accept(JobProgressMessage.error(PLATFORM, "请先登录51job（Cookie 表无登录态）"));
                 return;
             }
-
-            // 检查是否已登录
-            if (!playwrightManager.isLoggedIn(PLATFORM)) {
-                progressCallback.accept(JobProgressMessage.error(PLATFORM, "请先登录51job"));
-                return;
-            }
-
             // 通过校验后再标记运行
             isRunning = true;
             shouldStop = false;
@@ -89,7 +90,6 @@ public class Job51JobService implements JobPlatformService {
             };
 
             Job51 job51 = job51Provider.getObject();
-            job51.setPage(page);
             job51.setConfig(config);
             job51.setProgressCallback(job51Callback);
             job51.setShouldStopCallback(this::shouldStop);
