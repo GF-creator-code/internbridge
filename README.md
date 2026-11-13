@@ -6,6 +6,8 @@
 
 **[開啟工作台 / Open workspace](https://gf-creator-code.github.io/internbridge/)**　·　[下載發行版](https://github.com/GF-creator-code/internbridge/releases/latest)
 
+![工作台示例，香港和深圳的虛構職位按進度列在同一張清單](docs/internbridge-workspace.png)
+
 ## 第一次使用
 
 1. 開啟工作台，從「香港」或「中國內地」進入招聘網站。亦可加入公司校招官網或學校就業中心的職位連結。
