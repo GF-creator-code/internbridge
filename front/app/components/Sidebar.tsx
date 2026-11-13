@@ -65,7 +65,7 @@ export default function Sidebar() {
   }, [])
 
   const envGroup = [
-    { href: '/', icon: BiBriefcase, label: '返回實習工作台', color: 'text-emerald-300' },
+    { href: '/', icon: BiBriefcase, label: '配置管理中心', color: 'text-emerald-300' },
     { href: '/env-config', icon: BiEnvelope, label: '环境配置', color: 'text-cyan-300' },
     { href: '/ai-config', icon: BiBrain, label: 'AI配置', color: 'text-purple-300' },
   ]
@@ -81,7 +81,6 @@ export default function Sidebar() {
   ]
 
   const dashboardGroup = [
-    { href: '/workspace/index.html?local', icon: BiBriefcase, label: '投递追踪工作台', color: 'text-emerald-300' },
     { href: '/boss/analysis', icon: BiBriefcase, label: 'Boss 投递分析', color: 'text-indigo-300' },
     { href: '/shixiseng/analysis', icon: BiBriefcase, label: '实习僧投递分析', color: 'text-emerald-300' },
     { href: '/zhilian/analysis', icon: BiBriefcase, label: '智联投递分析', color: 'text-cyan-300' },
@@ -107,7 +106,7 @@ export default function Sidebar() {
         <div className="flex items-center gap-3 mb-2">
           <span className="text-4xl leading-none">🍀</span>
           <div>
-            <h1 className="text-xl font-bold text-white"><a href="/workspace/index.html?local">InternBridge</a></h1>
+            <h1 className="text-xl font-bold text-white"><a href="/">Get Jobs</a></h1>
             <p className="text-white dark:text-manatee text-sm">配置管理中心</p>
           </div>
         </div>

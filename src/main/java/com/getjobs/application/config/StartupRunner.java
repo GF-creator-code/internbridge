@@ -37,7 +37,7 @@ public class StartupRunner implements ApplicationRunner {
 
     @Override
     public void run(ApplicationArguments args) throws Exception {
-        if (openDashboard) openBrowser("http://127.0.0.1:" + backendPort + "/workspace/index.html?local");
+        if (openDashboard) openBrowser("http://127.0.0.1:" + backendPort + "/");
         if (!openPlatforms) return;
 
         // 在尝试打开管理页面之后，初始化 Playwright（满足“先打开管理页，再实例化”）

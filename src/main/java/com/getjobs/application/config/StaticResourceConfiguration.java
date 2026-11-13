@@ -27,6 +27,6 @@ public class StaticResourceConfiguration implements WebMvcConfigurer {
 
     @Override
     public void addViewControllers(ViewControllerRegistry registry) {
-        registry.addViewController("/").setViewName("redirect:/workspace/index.html?local");
+        registry.addViewController("/").setViewName("redirect:/boss");
     }
 }
