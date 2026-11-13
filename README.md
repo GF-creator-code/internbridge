@@ -38,7 +38,7 @@
 ### 1️⃣ 拉取代码
 
 ```bash
-git clone <你的仓库地址>
+git clone https://github.com/GF-creator-code/internbridge.git
 cd get_jobs
 ```
 

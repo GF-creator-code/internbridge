@@ -51,7 +51,7 @@ features:
 
 ```bash
 # 1. 克隆项目仓库
-git clone <你的仓库地址>
+git clone https://github.com/GF-creator-code/internbridge.git
 cd get_jobs
 
 # 2. 放置空数据库文件（从上游 Release 下载 getjobs.db.template 重命名为 getjobs.db）
