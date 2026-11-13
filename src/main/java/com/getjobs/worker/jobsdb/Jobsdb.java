@@ -5,6 +5,7 @@ import com.getjobs.application.entity.JobsdbJobDataEntity;
 import com.getjobs.application.service.AiService;
 import com.getjobs.application.service.JobsdbService;
 import com.getjobs.worker.utils.Job;
+import com.getjobs.worker.utils.KeywordFilter;
 import com.getjobs.worker.utils.PlaywrightUtil;
 import com.microsoft.playwright.Locator;
 import com.microsoft.playwright.Page;
@@ -171,12 +172,14 @@ public class Jobsdb {
                     }
 
                     try {
-                        if (isExcludedCompany(pj.companyName)) {
-                            log.info("命中硬性排除（腾讯/字节跳动），跳过：{} | {}", pj.companyName, pj.jobTitle);
+                        // 通用关键词过滤：英文站的排除词种子与简体站一致（公司名多为中文/英文混合）
+                        String excludeHit = KeywordFilter.hitExcludeWord(pj.jobTitle, pj.companyName, config.getExcludeKeywords());
+                        if (excludeHit != null) {
+                            log.info("命中排除关键词[{}]，跳过：{} | {}", excludeHit, pj.companyName, pj.jobTitle);
                             continue;
                         }
-                        if (config.isSkipLegal() && (isLegalJob(pj.jobTitle) || isLegalJob(pj.companyName))) {
-                            log.info("被过滤（法律岗）：{} | {}", pj.companyName, pj.jobTitle);
+                        if (!KeywordFilter.matchesInclude(pj.jobTitle, config.getIncludeKeywords())) {
+                            log.info("标题未命中必含关键词，跳过：{} | {}", pj.companyName, pj.jobTitle);
                             continue;
                         }
                         if (deliverOne(pj, keyword)) {
@@ -825,27 +828,6 @@ public class Jobsdb {
         } catch (Exception e) {
             return "";
         }
-    }
-
-    private boolean isExcludedCompany(String company) {
-        if (company == null || company.isBlank()) {
-            return false;
-        }
-        return company.contains("腾讯") || company.contains("字節") || company.contains("字节");
-    }
-
-    private boolean isLegalJob(String text) {
-        if (text == null || text.isBlank()) {
-            return false;
-        }
-        String[] terms = {"法务", "法務", "法律", "律师", "律師", "律所", "非诉", "非訴",
-                "诉讼", "訴訟", "仲裁", "知识产权", "知識產權", "专利", "專利", "法證", "法证", "Forensic"};
-        for (String t : terms) {
-            if (text.contains(t)) {
-                return true;
-            }
-        }
-        return false;
     }
 
     private String formatDuration(long millis) {

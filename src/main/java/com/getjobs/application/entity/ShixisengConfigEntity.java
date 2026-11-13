@@ -19,13 +19,13 @@ public class ShixisengConfigEntity {
     /** 城市（中文名，直接拼进搜索 URL） */
     private String city;
 
-    /** 跳过法律岗 */
-    @com.baomidou.mybatisplus.annotation.TableField("skip_legal")
-    private Boolean skipLegal;
+    /** 标题必含关键词（JSON 数组字符串，空 = 不限制标题） */
+    @com.baomidou.mybatisplus.annotation.TableField("include_keywords")
+    private String includeKeywords;
 
-    /** 跳过技术岗 */
-    @com.baomidou.mybatisplus.annotation.TableField("skip_technical")
-    private Boolean skipTechnical;
+    /** 排除关键词（JSON 数组字符串，命中标题或公司名即跳过） */
+    @com.baomidou.mybatisplus.annotation.TableField("exclude_keywords")
+    private String excludeKeywords;
 
     /** 投递间隔（秒） */
     @com.baomidou.mybatisplus.annotation.TableField("wait_time")

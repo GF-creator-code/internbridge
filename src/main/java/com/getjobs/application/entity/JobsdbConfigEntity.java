@@ -28,9 +28,13 @@ public class JobsdbConfigEntity {
     /** 投递用简历 PDF 绝对路径 */
     private String resumePath;
 
-    /** 跳过法律岗 */
-    @com.baomidou.mybatisplus.annotation.TableField("skip_legal")
-    private Boolean skipLegal;
+    /** 标题必含关键词（JSON 数组字符串，空 = 不限制标题） */
+    @com.baomidou.mybatisplus.annotation.TableField("include_keywords")
+    private String includeKeywords;
+
+    /** 排除关键词（JSON 数组字符串，命中标题或公司名即跳过） */
+    @com.baomidou.mybatisplus.annotation.TableField("exclude_keywords")
+    private String excludeKeywords;
 
     /** AI cover letter 开关 */
     @com.baomidou.mybatisplus.annotation.TableField("enable_ai")

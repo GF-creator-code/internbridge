@@ -25,4 +25,14 @@ public class LiepinConfig {
      */
     private String salary;
 
+    /**
+     * 标题必含关键词（空 = 不限制标题）
+     */
+    private List<String> includeKeywords;
+
+    /**
+     * 排除关键词（命中标题或公司名即跳过）
+     */
+    private List<String> excludeKeywords;
+
 }

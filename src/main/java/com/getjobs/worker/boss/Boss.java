@@ -6,6 +6,7 @@ import com.getjobs.application.service.BossResumeImageService;
 import com.getjobs.application.service.BossService;
 import com.getjobs.worker.utils.Job;
 import com.getjobs.worker.utils.JobUtils;
+import com.getjobs.worker.utils.KeywordFilter;
 import com.getjobs.worker.utils.PlaywrightUtil;
 import com.microsoft.playwright.Frame;
 import com.microsoft.playwright.Locator;
@@ -440,9 +441,14 @@ public class Boss {
                     log.info("被过滤：招聘者黑名单命中 | 公司：{} | 岗位：{} | 招聘者：{} | 关键词：{}", bossCompany != null ? bossCompany : "", jobName != null ? jobName : "", bossJobTitle, term != null ? term : "");
                     continue;
                 }
-                // 只投实习岗：岗位名称必须含「实习」
-                if (jobName == null || !jobName.contains("实习")) {
-                    log.info("被过滤：非实习岗位 | 公司：{} | 岗位：{}", bossCompany != null ? bossCompany : "", jobName != null ? jobName : "");
+                // 通用关键词过滤：必含词为空则不限标题；排除词命中标题或公司即跳过（与黑名单表互补）
+                if (!KeywordFilter.matchesInclude(jobName, config.getIncludeKeywords())) {
+                    log.info("被过滤：标题未命中必含关键词 | 公司：{} | 岗位：{}", bossCompany != null ? bossCompany : "", jobName != null ? jobName : "");
+                    continue;
+                }
+                String excludeHit = KeywordFilter.hitExcludeWord(jobName, bossCompany, config.getExcludeKeywords());
+                if (excludeHit != null) {
+                    log.info("被过滤：命中排除关键词[{}] | 公司：{} | 岗位：{}", excludeHit, bossCompany != null ? bossCompany : "", jobName != null ? jobName : "");
                     continue;
                 }
 

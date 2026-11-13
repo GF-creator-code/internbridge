@@ -268,6 +268,16 @@ public class ConfigService {
             config.setSalary((codeByName != null && !codeByName.isEmpty()) ? codeByName : salaryCode.trim());
         }
 
+        // 通用过滤关键词（列首次为 NULL 时由 LiepinService 写入种子值）
+        if (entity != null) {
+            liepinService.seedKeywordsIfBlank(entity);
+            config.setIncludeKeywords(com.getjobs.worker.utils.KeywordFilter.parse(entity.getIncludeKeywords()));
+            config.setExcludeKeywords(com.getjobs.worker.utils.KeywordFilter.parse(entity.getExcludeKeywords()));
+        } else {
+            config.setIncludeKeywords(new java.util.ArrayList<>());
+            config.setExcludeKeywords(new java.util.ArrayList<>());
+        }
+
         return config;
     }
 

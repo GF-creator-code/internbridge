@@ -11,6 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import AnalysisContent from '@/app/jobsdb/analysis/AnalysisContent'
 import PageHeader from '@/app/components/PageHeader'
 import ToggleSwitch, { toBool } from '@/app/components/ToggleSwitch'
+import KeywordListsField, { parseKeywordList, serializeKeywordList } from '@/app/components/KeywordListsField'
 import { API_BASE } from '@/lib/api'
 
 interface JobsdbConfig {
@@ -20,7 +21,8 @@ interface JobsdbConfig {
   account?: string
   password?: string
   resumePath?: string
-  skipLegal?: boolean
+  includeKeywords?: string
+  excludeKeywords?: string
   enableAi?: boolean
   waitTime?: number
   collectOnly?: boolean
@@ -37,7 +39,7 @@ export default function JobsdbPage() {
   const [logoutResult, setLogoutResult] = useState<{ success: boolean; message: string } | null>(null)
   const [backendAvailable, setBackendAvailable] = useState(true)
 
-  const [config, setConfig] = useState<JobsdbConfig>({ keywords: '', city: 'Hong Kong', account: '', password: '', resumePath: '', skipLegal: true, enableAi: true, waitTime: 2, collectOnly: true })
+  const [config, setConfig] = useState<JobsdbConfig>({ keywords: '', city: 'Hong Kong', account: '', password: '', resumePath: '', includeKeywords: '', excludeKeywords: '', enableAi: true, waitTime: 2, collectOnly: true })
   const [loadingConfig, setLoadingConfig] = useState(true)
 
   useEffect(() => {
@@ -119,7 +121,8 @@ export default function JobsdbPage() {
       if (data.config) {
         const normalized = { ...data.config }
         normalized.keywords = parseKeywordsFromDb(data.config.keywords)
-        normalized.skipLegal = toBool(data.config.skipLegal, true)
+        normalized.includeKeywords = parseKeywordList(data.config.includeKeywords)
+        normalized.excludeKeywords = parseKeywordList(data.config.excludeKeywords)
         normalized.enableAi = toBool(data.config.enableAi, true)
         normalized.collectOnly = toBool(data.config.collectOnly, true)
         normalized.waitTime = Number(data.config.waitTime) > 0 ? Number(data.config.waitTime) : 2
@@ -198,7 +201,12 @@ export default function JobsdbPage() {
 
   const handleSaveConfig = async () => {
     try {
-      const payload = { ...config, keywords: serializeKeywordsForDb(config.keywords) }
+      const payload = {
+        ...config,
+        keywords: serializeKeywordsForDb(config.keywords),
+        includeKeywords: serializeKeywordList(config.includeKeywords),
+        excludeKeywords: serializeKeywordList(config.excludeKeywords),
+      }
       const response = await fetch(`${API_BASE}/api/jobsdb/config`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -348,16 +356,14 @@ export default function JobsdbPage() {
                       onToggle={() => setConfig((c) => ({ ...c, collectOnly: !c.collectOnly }))}
                     />
                   </div>
-                  <div className="flex flex-col gap-3 border-t pt-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="space-y-1">
-                      <Label htmlFor="skipLegal" className="text-base font-medium">跳过法务/法律岗</Label>
-                      <p className="text-sm text-muted-foreground">开启后自动排除法务、律师、诉讼等法律类岗位。</p>
-                    </div>
-                    <ToggleSwitch
-                      id="skipLegal"
-                      label="跳过法务/法律岗"
-                      checked={!!config.skipLegal}
-                      onToggle={() => setConfig((c) => ({ ...c, skipLegal: !c.skipLegal }))}
+                  <div className="border-t pt-3">
+                    <KeywordListsField
+                      includeValue={config.includeKeywords || ''}
+                      excludeValue={config.excludeKeywords || ''}
+                      onIncludeChange={(v) => setConfig((c) => ({ ...c, includeKeywords: v }))}
+                      onExcludeChange={(v) => setConfig((c) => ({ ...c, excludeKeywords: v }))}
+                      includePlaceholder="如：internship, graduate"
+                      excludePlaceholder="如：legal, lawyer, Tencent"
                     />
                   </div>
                   <div className="flex flex-col gap-3 border-t pt-3 sm:flex-row sm:items-center sm:justify-between">

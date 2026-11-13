@@ -7,6 +7,7 @@ import com.getjobs.application.entity.ShixisengJobDataEntity;
 import com.getjobs.application.mapper.ShixisengConfigMapper;
 import com.getjobs.application.mapper.ShixisengJobDataMapper;
 import com.getjobs.worker.shixiseng.ShiXiSengConfig;
+import com.getjobs.worker.utils.KeywordFilter;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -30,6 +31,22 @@ public class ShixisengService {
     private final ShixisengJobDataMapper shixisengJobDataMapper;
     private final DataSource dataSource;
 
+    /**
+     * 实习僧平台种子：整站都是实习岗（必含词为空）；排除词叠加开发/算法/硬件等
+     * 纯技术方向（历史「跳过技术岗」规则的数字化迁移，可在配置页直接增删）。
+     */
+    private static final List<String> SEED_INCLUDE = new ArrayList<>();
+    private static final List<String> SEED_EXCLUDE_EXTRA = List.of(
+            "开发", "開發", "研发", "研發", "后端", "後端", "前端", "全栈", "全端",
+            "客户端", "客戶端", "服务端", "服務端", "算法工程师", "算法研究",
+            "机器学习", "機器學習", "深度学习", "深度學習", "大模型", "NLP", "自然语言", "自然語言",
+            "计算机视觉", "計算機視覺", "嵌入式", "硬件", "硬體", "芯片", "晶片", "FPGA",
+            "驱动", "驅動", "测试开发", "測試開發", "自动化测试", "自動化測試",
+            "运维", "運維", "网络工程", "網絡工程", "安全工程师", "安全工程師", "渗透", "滲透",
+            "架构师", "架構師", "Java", "C++", "Golang", "Go开发", "Python开发",
+            "数据开发", "數據開發", "大数据开发", "大數據開發", "爬虫", "爬蟲",
+            "游戏开发", "遊戲開發", "Unity", "安卓", "iOS");
+
     // ==================== 配置 ====================
 
     /** 获取第一条配置（通常只有一条） */
@@ -37,6 +54,35 @@ public class ShixisengService {
         QueryWrapper<ShixisengConfigEntity> wrapper = new QueryWrapper<>();
         wrapper.last("LIMIT 1");
         return shixisengConfigMapper.selectOne(wrapper);
+    }
+
+    /** 关键词列首次为空时写入种子值（一次性迁移，之后由用户在配置页维护） */
+    private void seedKeywordsIfBlank(ShixisengConfigEntity entity) {
+        boolean changed = false;
+        if (entity.getIncludeKeywords() == null) {
+            entity.setIncludeKeywords(com.getjobs.worker.utils.KeywordFilter.serialize(SEED_INCLUDE));
+            changed = true;
+        }
+        if (entity.getExcludeKeywords() == null) {
+            entity.setExcludeKeywords(com.getjobs.worker.utils.KeywordFilter.serialize(
+                    com.getjobs.worker.utils.KeywordFilter.merge(
+                            com.getjobs.worker.utils.KeywordFilter.DEFAULT_EXCLUDE, SEED_EXCLUDE_EXTRA)));
+            changed = true;
+        }
+        if (changed && entity.getId() != null) {
+            ShixisengConfigEntity patch = new ShixisengConfigEntity();
+            patch.setId(entity.getId());
+            patch.setIncludeKeywords(entity.getIncludeKeywords());
+            patch.setExcludeKeywords(entity.getExcludeKeywords());
+            try {
+                shixisengConfigMapper.updateById(patch);
+                log.info("实习僧关键词种子已写入（include {} 项 / exclude {} 项）",
+                        KeywordFilter.parse(entity.getIncludeKeywords()).size(),
+                        KeywordFilter.parse(entity.getExcludeKeywords()).size());
+            } catch (Exception e) {
+                log.warn("写入实习僧关键词种子失败: {}", e.getMessage());
+            }
+        }
     }
 
     /** 从专表构建 ShiXiSengConfig */
@@ -51,8 +97,9 @@ public class ShixisengService {
         }
         config.setKeywords(parseListString(entity.getKeywords()));
         config.setCity(safeTrim(entity.getCity()) == null ? "北京" : safeTrim(entity.getCity()));
-        config.setSkipLegal(entity.getSkipLegal() == null || entity.getSkipLegal());
-        config.setSkipTechnical(entity.getSkipTechnical() == null || entity.getSkipTechnical());
+        seedKeywordsIfBlank(entity);
+        config.setIncludeKeywords(KeywordFilter.parse(entity.getIncludeKeywords()));
+        config.setExcludeKeywords(KeywordFilter.parse(entity.getExcludeKeywords()));
         config.setWaitTime(entity.getWaitTime() == null ? 2 : entity.getWaitTime());
         return config;
     }
@@ -105,8 +152,8 @@ public class ShixisengService {
             ShixisengConfigEntity toInsert = new ShixisengConfigEntity();
             toInsert.setKeywords(incoming.getKeywords());
             toInsert.setCity(incoming.getCity());
-            toInsert.setSkipLegal(incoming.getSkipLegal());
-            toInsert.setSkipTechnical(incoming.getSkipTechnical());
+            toInsert.setIncludeKeywords(incoming.getIncludeKeywords());
+            toInsert.setExcludeKeywords(incoming.getExcludeKeywords());
             toInsert.setWaitTime(incoming.getWaitTime());
             toInsert.setCreatedAt(now);
             toInsert.setUpdatedAt(now);
@@ -117,8 +164,8 @@ public class ShixisengService {
             toUpdate.setId(first.getId());
             if (incoming.getKeywords() != null) toUpdate.setKeywords(incoming.getKeywords());
             if (incoming.getCity() != null) toUpdate.setCity(incoming.getCity());
-            if (incoming.getSkipLegal() != null) toUpdate.setSkipLegal(incoming.getSkipLegal());
-            if (incoming.getSkipTechnical() != null) toUpdate.setSkipTechnical(incoming.getSkipTechnical());
+            if (incoming.getIncludeKeywords() != null) toUpdate.setIncludeKeywords(incoming.getIncludeKeywords());
+            if (incoming.getExcludeKeywords() != null) toUpdate.setExcludeKeywords(incoming.getExcludeKeywords());
             if (incoming.getWaitTime() != null) toUpdate.setWaitTime(incoming.getWaitTime());
             toUpdate.setCreatedAt(first.getCreatedAt());
             toUpdate.setUpdatedAt(now);
@@ -135,8 +182,8 @@ public class ShixisengService {
                 " id INTEGER PRIMARY KEY AUTOINCREMENT," +
                 " keywords VARCHAR(500)," +
                 " city VARCHAR(100)," +
-                " skip_legal INTEGER DEFAULT 1," +
-                " skip_technical INTEGER DEFAULT 1," +
+                " include_keywords TEXT," +
+                " exclude_keywords TEXT," +
                 " wait_time INTEGER DEFAULT 2," +
                 " created_at DATETIME," +
                 " updated_at DATETIME" +
@@ -155,10 +202,14 @@ public class ShixisengService {
                 ")";
         try (Connection conn = dataSource.getConnection(); Statement stmt = conn.createStatement()) {
             stmt.execute(createConfig);
-            for (String col : new String[]{"skip_legal INTEGER DEFAULT 1", "skip_technical INTEGER DEFAULT 1", "wait_time INTEGER DEFAULT 2"}) {
+            for (String col : new String[]{"include_keywords TEXT", "exclude_keywords TEXT", "wait_time INTEGER DEFAULT 2"}) {
                 try { stmt.execute("ALTER TABLE shixiseng_config ADD COLUMN " + col); } catch (Exception ignored) {}
             }
             stmt.execute(createData);
+            ShixisengConfigEntity first = getFirstConfig();
+            if (first != null) {
+                seedKeywordsIfBlank(first);
+            }
             log.info("确保 shixiseng_config / shixiseng_data 表已存在");
         } catch (Exception e) {
             log.warn("创建实习僧表失败: {}", e.getMessage());

@@ -71,8 +71,41 @@ public class BossService {
             if (tableExists && !names.contains("repeat_chat_messages")) {
                 statement.executeUpdate("ALTER TABLE boss_config ADD COLUMN repeat_chat_messages TEXT");
             }
+            if (tableExists && !names.contains("include_keywords")) {
+                statement.executeUpdate("ALTER TABLE boss_config ADD COLUMN include_keywords TEXT");
+            }
+            if (tableExists && !names.contains("exclude_keywords")) {
+                statement.executeUpdate("ALTER TABLE boss_config ADD COLUMN exclude_keywords TEXT");
+            }
         } catch (java.sql.SQLException e) {
-            throw new IllegalStateException("无法初始化Boss重复沟通配置", e);
+            throw new IllegalStateException("无法初始化Boss配置列", e);
+        }
+        // 启动即种子：已有配置行且关键词列为 NULL 时写入默认值，配置页首屏即可见
+        try {
+            BossConfigEntity first = getFirstConfig();
+            if (first != null && (first.getIncludeKeywords() == null || first.getExcludeKeywords() == null)) {
+                boolean changed = false;
+                if (first.getIncludeKeywords() == null) {
+                    first.setIncludeKeywords(com.getjobs.worker.utils.KeywordFilter.serialize(
+                            com.getjobs.worker.utils.KeywordFilter.DEFAULT_INCLUDE));
+                    changed = true;
+                }
+                if (first.getExcludeKeywords() == null) {
+                    first.setExcludeKeywords(com.getjobs.worker.utils.KeywordFilter.serialize(
+                            com.getjobs.worker.utils.KeywordFilter.DEFAULT_EXCLUDE));
+                    changed = true;
+                }
+                if (changed && first.getId() != null) {
+                    BossConfigEntity patch = new BossConfigEntity();
+                    patch.setId(first.getId());
+                    patch.setIncludeKeywords(first.getIncludeKeywords());
+                    patch.setExcludeKeywords(first.getExcludeKeywords());
+                    bossConfigMapper.updateById(patch);
+                    log.info("Boss 关键词种子已写入（include 实习 / exclude 法务·腾讯·字节）");
+                }
+            }
+        } catch (Exception e) {
+            log.warn("写入 Boss 关键词种子失败: {}", e.getMessage());
         }
     }
 
@@ -286,6 +319,8 @@ public class BossService {
         if (partial.getExpectedSalaryMax() != null) existing.setExpectedSalaryMax(partial.getExpectedSalaryMax());
 
         if (partial.getDeadStatus() != null) existing.setDeadStatus(partial.getDeadStatus());
+        if (partial.getIncludeKeywords() != null) existing.setIncludeKeywords(partial.getIncludeKeywords());
+        if (partial.getExcludeKeywords() != null) existing.setExcludeKeywords(partial.getExcludeKeywords());
 
         existing.setUpdatedAt(now);
         bossConfigMapper.updateById(existing);
@@ -328,6 +363,34 @@ public class BossService {
 
         // 关键词（允许逗号或括号列表），直接解析为列表
         config.setKeywords(parseListString(entity.getKeywords()));
+
+        // 通用过滤关键词：列首次为 NULL 时写入种子值（必含「实习」+ 排除法务/腾讯/字节），
+        // 之后由配置页维护；「[]」是用户清空后的合法值，不触发种子。
+        boolean seedNeeded = false;
+        if (entity.getIncludeKeywords() == null) {
+            entity.setIncludeKeywords(com.getjobs.worker.utils.KeywordFilter.serialize(
+                    com.getjobs.worker.utils.KeywordFilter.DEFAULT_INCLUDE));
+            seedNeeded = true;
+        }
+        if (entity.getExcludeKeywords() == null) {
+            entity.setExcludeKeywords(com.getjobs.worker.utils.KeywordFilter.serialize(
+                    com.getjobs.worker.utils.KeywordFilter.DEFAULT_EXCLUDE));
+            seedNeeded = true;
+        }
+        if (seedNeeded && entity.getId() != null) {
+            BossConfigEntity patch = new BossConfigEntity();
+            patch.setId(entity.getId());
+            patch.setIncludeKeywords(entity.getIncludeKeywords());
+            patch.setExcludeKeywords(entity.getExcludeKeywords());
+            try {
+                bossConfigMapper.updateById(patch);
+                log.info("Boss 关键词种子已写入（include 实习 / exclude 法务·腾讯·字节）");
+            } catch (Exception e) {
+                log.warn("写入 Boss 关键词种子失败: {}", e.getMessage());
+            }
+        }
+        config.setIncludeKeywords(com.getjobs.worker.utils.KeywordFilter.parse(entity.getIncludeKeywords()));
+        config.setExcludeKeywords(com.getjobs.worker.utils.KeywordFilter.parse(entity.getExcludeKeywords()));
 
         // 将中文名转换为代码，供 Worker 使用
         // 城市：单值或列表，统一转换为代码列表

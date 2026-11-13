@@ -11,6 +11,7 @@ import { Select } from '@/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import AnalysisContent from '@/app/zhilian/analysis/AnalysisContent'
 import PageHeader from '@/app/components/PageHeader'
+import { parseKeywordList, serializeKeywordList } from '@/app/components/KeywordListsField'
 import { API_BASE } from '@/lib/api'
 
 interface ZhilianConfig {
@@ -18,6 +19,8 @@ interface ZhilianConfig {
   keywords?: string
   cityCode?: string
   salary?: string
+  includeKeywords?: string
+  excludeKeywords?: string
 }
 
 interface Option { name: string; code: string }
@@ -122,6 +125,8 @@ export default function ZhilianPage() {
       if (data.config) {
         const normalized = { ...data.config }
         normalized.keywords = parseKeywordsFromDb(data.config.keywords)
+        normalized.includeKeywords = parseKeywordList(data.config.includeKeywords)
+        normalized.excludeKeywords = parseKeywordList(data.config.excludeKeywords)
         setConfig(normalized)
       }
       if (data.options) setOptions(data.options)
@@ -200,7 +205,12 @@ export default function ZhilianPage() {
 
   const handleSaveConfig = async () => {
     try {
-      const payload = { ...config, keywords: serializeKeywordsForDb(config.keywords) }
+      const payload = {
+        ...config,
+        keywords: serializeKeywordsForDb(config.keywords),
+        includeKeywords: serializeKeywordList(config.includeKeywords),
+        excludeKeywords: serializeKeywordList(config.excludeKeywords),
+      }
       const response = await fetch(`${API_BASE}/api/zhilian/config`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -320,6 +330,22 @@ export default function ZhilianPage() {
                       placeholder="如：12000, 20000 或 不限"
                       value={config.salary || ''}
                       onChange={(e) => setConfig((c) => ({ ...c, salary: e.target.value }))}
+                    />
+                  </div>
+                  <div className="space-y-2 md:col-span-2">
+                    <Label>标题必含关键词（逗号分隔，留空不限制）</Label>
+                    <Input
+                      placeholder="如：实习（岗位标题须包含其中之一才会投递）"
+                      value={config.includeKeywords || ''}
+                      onChange={(e) => setConfig((c) => ({ ...c, includeKeywords: e.target.value }))}
+                    />
+                  </div>
+                  <div className="space-y-2 md:col-span-2">
+                    <Label>排除关键词（逗号分隔）</Label>
+                    <Input
+                      placeholder="如：法务, 律师, 腾讯, 字节（标题或公司命中即跳过）"
+                      value={config.excludeKeywords || ''}
+                      onChange={(e) => setConfig((c) => ({ ...c, excludeKeywords: e.target.value }))}
                     />
                   </div>
                 </div>

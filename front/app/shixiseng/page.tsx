@@ -11,15 +11,15 @@ import { Select } from '@/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import AnalysisContent from '@/app/zhilian/analysis/AnalysisContent'
 import PageHeader from '@/app/components/PageHeader'
-import ToggleSwitch, { toBool } from '@/app/components/ToggleSwitch'
+import KeywordListsField, { parseKeywordList, serializeKeywordList } from '@/app/components/KeywordListsField'
 import { API_BASE } from '@/lib/api'
 
 interface ShixisengConfig {
   id?: number
   keywords?: string
   city?: string
-  skipLegal?: boolean
-  skipTechnical?: boolean
+  includeKeywords?: string
+  excludeKeywords?: string
   waitTime?: number
 }
 
@@ -37,7 +37,7 @@ export default function ZhilianPage() {
   const [logoutResult, setLogoutResult] = useState<{ success: boolean; message: string } | null>(null)
   const [backendAvailable, setBackendAvailable] = useState(true)
 
-  const [config, setConfig] = useState<ShixisengConfig>({ keywords: '', city: '', skipLegal: true, skipTechnical: true, waitTime: 2 })
+  const [config, setConfig] = useState<ShixisengConfig>({ keywords: '', city: '', includeKeywords: '', excludeKeywords: '', waitTime: 2 })
   const [options] = useState<{ city: {code:string;name:string}[] }>({ city: [] })
   const [loadingConfig, setLoadingConfig] = useState(true)
 
@@ -125,8 +125,8 @@ export default function ZhilianPage() {
       if (data.config) {
         const normalized = { ...data.config }
         normalized.keywords = parseKeywordsFromDb(data.config.keywords)
-        normalized.skipLegal = toBool(data.config.skipLegal, true)
-        normalized.skipTechnical = toBool(data.config.skipTechnical, true)
+        normalized.includeKeywords = parseKeywordList(data.config.includeKeywords)
+        normalized.excludeKeywords = parseKeywordList(data.config.excludeKeywords)
         normalized.waitTime = Number(data.config.waitTime) > 0 ? Number(data.config.waitTime) : 2
         setConfig(normalized)
       }
@@ -206,7 +206,12 @@ export default function ZhilianPage() {
 
   const handleSaveConfig = async () => {
     try {
-      const payload = { ...config, keywords: serializeKeywordsForDb(config.keywords) }
+      const payload = {
+        ...config,
+        keywords: serializeKeywordsForDb(config.keywords),
+        includeKeywords: serializeKeywordList(config.includeKeywords),
+        excludeKeywords: serializeKeywordList(config.excludeKeywords),
+      }
       const response = await fetch(`${API_BASE}/api/shixiseng/config`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -320,30 +325,14 @@ export default function ZhilianPage() {
                   </div>
                   <div className="space-y-3 rounded-lg border bg-muted/20 p-4">
                     <p className="text-sm font-medium">投递行为</p>
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                      <div className="space-y-1">
-                        <Label htmlFor="skipLegal" className="text-base font-medium">跳过法务/法律岗</Label>
-                        <p className="text-sm text-muted-foreground">开启后自动排除法务、律师、诉讼等法律类岗位。</p>
-                      </div>
-                      <ToggleSwitch
-                        id="skipLegal"
-                        label="跳过法务/法律岗"
-                        checked={!!config.skipLegal}
-                        onToggle={() => setConfig((c) => ({ ...c, skipLegal: !c.skipLegal }))}
-                      />
-                    </div>
-                    <div className="flex flex-col gap-3 border-t pt-3 sm:flex-row sm:items-center sm:justify-between">
-                      <div className="space-y-1">
-                        <Label htmlFor="skipTechnical" className="text-base font-medium">跳过技术开发岗</Label>
-                        <p className="text-sm text-muted-foreground">开启后自动排除开发、算法、运维等硬技术岗，优先非技术方向。</p>
-                      </div>
-                      <ToggleSwitch
-                        id="skipTechnical"
-                        label="跳过技术开发岗"
-                        checked={!!config.skipTechnical}
-                        onToggle={() => setConfig((c) => ({ ...c, skipTechnical: !c.skipTechnical }))}
-                      />
-                    </div>
+                    <KeywordListsField
+                      includeValue={config.includeKeywords || ''}
+                      excludeValue={config.excludeKeywords || ''}
+                      onIncludeChange={(v) => setConfig((c) => ({ ...c, includeKeywords: v }))}
+                      onExcludeChange={(v) => setConfig((c) => ({ ...c, excludeKeywords: v }))}
+                      includePlaceholder="实习僧整站均为实习岗，通常留空"
+                      excludePlaceholder="如：法务, 律师, 开发, 算法, 腾讯, 字节"
+                    />
                     <div className="flex flex-col gap-3 border-t pt-3 sm:items-center sm:justify-between sm:flex-row">
                       <div className="space-y-1">
                         <Label htmlFor="waitTime" className="text-base font-medium">投递间隔（秒）</Label>

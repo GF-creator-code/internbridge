@@ -35,8 +35,15 @@ public class JobsdbConfig {
      */
     private String resumePath;
 
-    /** 跳过法律岗（默认开） */
-    private boolean skipLegal = true;
+    /**
+     * 标题必含关键词（空 = 不限制标题；英文站建议配 internship 等词）
+     */
+    private List<String> includeKeywords;
+
+    /**
+     * 排除关键词（命中标题或公司名即跳过）
+     */
+    private List<String> excludeKeywords;
 
     /** AI cover letter 开关（默认开，关闭后用固定模板） */
     private boolean enableAi = true;

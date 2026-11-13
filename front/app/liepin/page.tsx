@@ -11,6 +11,7 @@ import { Select } from '@/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import AnalysisContent from '@/app/liepin/analysis/AnalysisContent'
 import PageHeader from '@/app/components/PageHeader'
+import { parseKeywordList, serializeKeywordList } from '@/app/components/KeywordListsField'
 import { API_BASE } from '@/lib/api'
 
 interface LiepinConfig {
@@ -18,6 +19,8 @@ interface LiepinConfig {
   keywords?: string
   city?: string
   salaryCode?: string
+  includeKeywords?: string
+  excludeKeywords?: string
 }
 
 interface LiepinOption {
@@ -36,6 +39,8 @@ export default function LiepinPage() {
     keywords: '',
     city: '',
     salaryCode: '',
+    includeKeywords: '',
+    excludeKeywords: '',
   })
   const [options, setOptions] = useState<LiepinOptions>({
     city: [],
@@ -143,6 +148,8 @@ export default function LiepinPage() {
       if (data.config) {
         const normalized = { ...data.config }
         normalized.keywords = parseKeywordsFromDb(data.config.keywords)
+        normalized.includeKeywords = parseKeywordList(data.config.includeKeywords)
+        normalized.excludeKeywords = parseKeywordList(data.config.excludeKeywords)
         setConfig(normalized)
         // 检查当前城市是否在选项列表中
         if (data.options?.city && data.config.city) {
@@ -162,7 +169,12 @@ export default function LiepinPage() {
 
   const handleSave = async () => {
     try {
-      const payload = { ...config, keywords: serializeKeywordsForDb(config.keywords) }
+      const payload = {
+        ...config,
+        keywords: serializeKeywordsForDb(config.keywords),
+        includeKeywords: serializeKeywordList(config.includeKeywords),
+        excludeKeywords: serializeKeywordList(config.excludeKeywords),
+      }
       const response = await fetch(`${API_BASE}/api/liepin/config`, {
         method: 'PUT',
         headers: {
@@ -412,6 +424,28 @@ export default function LiepinPage() {
                   placeholder="例如：15$30"
                 />
                 <p className="text-xs text-muted-foreground">薪资范围码（例如：15$30表示15k-30k）</p>
+              </div>
+              <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="includeKeywords">标题必含关键词</Label>
+                  <Input
+                    id="includeKeywords"
+                    value={config.includeKeywords || ''}
+                    onChange={(e) => setConfig({ ...config, includeKeywords: e.target.value })}
+                    placeholder="如：实习（留空不限制标题）"
+                  />
+                  <p className="text-xs text-muted-foreground">岗位标题须包含其中之一才会投递</p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="excludeKeywords">排除关键词</Label>
+                  <Input
+                    id="excludeKeywords"
+                    value={config.excludeKeywords || ''}
+                    onChange={(e) => setConfig({ ...config, excludeKeywords: e.target.value })}
+                    placeholder="如：法务, 律师, 腾讯, 字节"
+                  />
+                  <p className="text-xs text-muted-foreground">标题或公司命中即跳过</p>
+                </div>
               </div>
             </div>
           </CardContent>

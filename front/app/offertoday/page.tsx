@@ -11,6 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import AnalysisContent from '@/app/offertoday/analysis/AnalysisContent'
 import PageHeader from '@/app/components/PageHeader'
 import ToggleSwitch, { toBool } from '@/app/components/ToggleSwitch'
+import KeywordListsField, { parseKeywordList, serializeKeywordList } from '@/app/components/KeywordListsField'
 import { API_BASE } from '@/lib/api'
 
 interface OfferTodayConfig {
@@ -19,7 +20,8 @@ interface OfferTodayConfig {
   city?: string
   account?: string
   password?: string
-  skipLegal?: boolean
+  includeKeywords?: string
+  excludeKeywords?: string
   enableAi?: boolean
   waitTime?: number
 }
@@ -35,7 +37,7 @@ export default function OfferTodayPage() {
   const [logoutResult, setLogoutResult] = useState<{ success: boolean; message: string } | null>(null)
   const [backendAvailable, setBackendAvailable] = useState(true)
 
-  const [config, setConfig] = useState<OfferTodayConfig>({ keywords: '', city: '香港', account: '', password: '', skipLegal: true, enableAi: true, waitTime: 2 })
+  const [config, setConfig] = useState<OfferTodayConfig>({ keywords: '', city: '香港', account: '', password: '', includeKeywords: '', excludeKeywords: '', enableAi: true, waitTime: 2 })
   const [loadingConfig, setLoadingConfig] = useState(true)
 
   useEffect(() => {
@@ -117,7 +119,8 @@ export default function OfferTodayPage() {
       if (data.config) {
         const normalized = { ...data.config }
         normalized.keywords = parseKeywordsFromDb(data.config.keywords)
-        normalized.skipLegal = toBool(data.config.skipLegal, true)
+        normalized.includeKeywords = parseKeywordList(data.config.includeKeywords)
+        normalized.excludeKeywords = parseKeywordList(data.config.excludeKeywords)
         normalized.enableAi = toBool(data.config.enableAi, true)
         normalized.waitTime = Number(data.config.waitTime) > 0 ? Number(data.config.waitTime) : 2
         setConfig(normalized)
@@ -195,7 +198,12 @@ export default function OfferTodayPage() {
 
   const handleSaveConfig = async () => {
     try {
-      const payload = { ...config, keywords: serializeKeywordsForDb(config.keywords) }
+      const payload = {
+        ...config,
+        keywords: serializeKeywordsForDb(config.keywords),
+        includeKeywords: serializeKeywordList(config.includeKeywords),
+        excludeKeywords: serializeKeywordList(config.excludeKeywords),
+      }
       const response = await fetch(`${API_BASE}/api/offertoday/config`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -325,18 +333,14 @@ export default function OfferTodayPage() {
                 </div>
                 <div className="mt-4 space-y-3 rounded-lg border bg-muted/20 p-4">
                   <p className="text-sm font-medium">投递行为</p>
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="space-y-1">
-                      <Label htmlFor="skipLegal" className="text-base font-medium">跳过法务/法律岗</Label>
-                      <p className="text-sm text-muted-foreground">开启后自动排除法务、律师、诉讼等法律类岗位。</p>
-                    </div>
-                    <ToggleSwitch
-                      id="skipLegal"
-                      label="跳过法务/法律岗"
-                      checked={!!config.skipLegal}
-                      onToggle={() => setConfig((c) => ({ ...c, skipLegal: !c.skipLegal }))}
-                    />
-                  </div>
+                  <KeywordListsField
+                    includeValue={config.includeKeywords || ''}
+                    excludeValue={config.excludeKeywords || ''}
+                    onIncludeChange={(v) => setConfig((c) => ({ ...c, includeKeywords: v }))}
+                    onExcludeChange={(v) => setConfig((c) => ({ ...c, excludeKeywords: v }))}
+                    includePlaceholder="實習類型卡片已在采集层过滤，通常留空"
+                    excludePlaceholder="如：法務, 律師, 腾讯, 字節"
+                  />
                   <div className="flex flex-col gap-3 border-t pt-3 sm:flex-row sm:items-center sm:justify-between">
                     <div className="space-y-1">
                       <Label htmlFor="enableAi" className="text-base font-medium">AI 生成招呼语</Label>

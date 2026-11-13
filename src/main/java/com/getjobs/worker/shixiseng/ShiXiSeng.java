@@ -3,6 +3,7 @@ package com.getjobs.worker.shixiseng;
 import com.getjobs.application.entity.ShixisengJobDataEntity;
 import com.getjobs.application.service.ShixisengService;
 import com.getjobs.worker.utils.Job;
+import com.getjobs.worker.utils.KeywordFilter;
 import com.getjobs.worker.utils.PlaywrightUtil;
 import com.microsoft.playwright.Locator;
 import com.microsoft.playwright.Page;
@@ -285,19 +286,17 @@ public class ShiXiSeng {
                 }
 
                 try {
-                    if (isExcludedCompany(pj.companyName)) {
-                        log.info("命中硬性排除（腾讯/字节跳动），跳过：{} | {}", pj.companyName, pj.jobTitle);
+                    // 通用关键词过滤：排除词命中标题/公司即跳过；必含词为空则不限标题
+                    String excludeHit = KeywordFilter.hitExcludeWord(pj.jobTitle, pj.companyName, config.getExcludeKeywords());
+                    if (excludeHit != null) {
+                        log.info("命中排除关键词[{}]，跳过：{} | {}", excludeHit, pj.companyName, pj.jobTitle);
                         continue;
                     }
-                    if (config.isSkipLegal() && (isLegalJob(pj.jobTitle) || isLegalJob(pj.companyName))) {
-                        log.info("被过滤（法律岗）：{} | {}", pj.companyName, pj.jobTitle);
+                    if (!KeywordFilter.matchesInclude(pj.jobTitle, config.getIncludeKeywords())) {
+                        log.info("标题未命中必含关键词，跳过：{} | {}", pj.companyName, pj.jobTitle);
                         continue;
                     }
-                    if (config.isSkipTechnical() && isTechnicalJob(pj.jobTitle)) {
-                        log.info("被过滤（技术难度大）：{} | {}", pj.companyName, pj.jobTitle);
-                        continue;
-                    }
-                    // 实习僧整站都是实习岗，不按标题里的「实习」二字过滤
+                    // 实习僧整站都是实习岗，必含词种子为空，不按标题里的「实习」二字过滤
                     if (deliverOne(pj)) {
                         resultList.add(buildJob(pj));
                     }
@@ -624,58 +623,6 @@ public class ShiXiSeng {
             log.warn("投递弹窗处理异常: {}", e.getMessage());
             return false;
         }
-    }
-
-    /**
-     * 硬性排除的公司（投递规则：只避开腾讯、字节跳动及其关联主体）
-     */
-    private boolean isExcludedCompany(String company) {
-        if (company == null || company.isBlank()) {
-            return false;
-        }
-        return company.contains("腾讯") || company.contains("字节");
-    }
-
-    /**
-     * 法律类岗位判定：命中任一关键词即跳过
-     */
-    private boolean isLegalJob(String text) {
-        if (text == null || text.isBlank()) {
-            return false;
-        }
-        String[] terms = {"法务", "法律", "律师", "律所", "非诉", "诉讼", "仲裁", "知识产权", "专利"};
-        for (String t : terms) {
-            if (text.contains(t)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    /**
-     * 技术难度大的岗位：纯开发/算法/硬件方向跳过，优先商科与非技术岗
-     */
-    private boolean isTechnicalJob(String title) {
-        if (title == null || title.isBlank()) {
-            return false;
-        }
-        String[] terms = {
-                "开发", "開發", "研发", "研發", "后端", "後端", "前端", "全栈", "全端",
-                "客户端", "客戶端", "服务端", "服務端", "算法工程师", "算法研究",
-                "机器学习", "機器學習", "深度学习", "深度學習", "大模型", "NLP", "自然语言", "自然語言",
-                "计算机视觉", "計算機視覺", "嵌入式", "硬件", "硬體", "芯片", "晶片", "FPGA",
-                "驱动", "驅動", "测试开发", "測試開發", "自动化测试", "自動化測試",
-                "运维", "運維", "网络工程", "網絡工程", "安全工程师", "安全工程師", "渗透", "滲透",
-                "架构师", "架構師", "Java", "C++", "Golang", "Go开发", "Python开发",
-                "数据开发", "數據開發", "大数据开发", "大數據開發", "爬虫", "爬蟲",
-                "游戏开发", "遊戲開發", "Unity", "安卓", "iOS"
-        };
-        for (String t : terms) {
-            if (title.contains(t)) {
-                return true;
-            }
-        }
-        return false;
     }
 
     /**

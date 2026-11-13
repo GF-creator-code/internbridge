@@ -30,12 +30,46 @@ public class OfferTodayService {
     private final OfferTodayJobDataMapper offerTodayJobDataMapper;
     private final DataSource dataSource;
 
+    /**
+     * OfferToday（香港）种子：崗位卡片已按「實習」类型过滤（必含词为空）；
+     * 排除词在共享默认之上叠加繁体法务词与「字節」，适配香港站繁体岗位标题。
+     */
+    private static final List<String> SEED_INCLUDE = new ArrayList<>();
+    private static final List<String> SEED_EXCLUDE_EXTRA = List.of(
+            "字節", "法務", "律師", "非訴", "訴訟", "知識產權", "專利", "法證", "法证", "Forensic");
+
     // ==================== 配置 ====================
 
     public OfferTodayConfigEntity getFirstConfig() {
         QueryWrapper<OfferTodayConfigEntity> wrapper = new QueryWrapper<>();
         wrapper.last("LIMIT 1");
         return offerTodayConfigMapper.selectOne(wrapper);
+    }
+
+    /** 关键词列首次为空时写入种子值（一次性迁移，之后由用户在配置页维护） */
+    private void seedKeywordsIfBlank(OfferTodayConfigEntity entity) {
+        boolean changed = false;
+        if (entity.getIncludeKeywords() == null) {
+            entity.setIncludeKeywords(com.getjobs.worker.utils.KeywordFilter.serialize(SEED_INCLUDE));
+            changed = true;
+        }
+        if (entity.getExcludeKeywords() == null) {
+            entity.setExcludeKeywords(com.getjobs.worker.utils.KeywordFilter.serialize(
+                    com.getjobs.worker.utils.KeywordFilter.merge(
+                            com.getjobs.worker.utils.KeywordFilter.DEFAULT_EXCLUDE, SEED_EXCLUDE_EXTRA)));
+            changed = true;
+        }
+        if (changed && entity.getId() != null) {
+            OfferTodayConfigEntity patch = new OfferTodayConfigEntity();
+            patch.setId(entity.getId());
+            patch.setIncludeKeywords(entity.getIncludeKeywords());
+            patch.setExcludeKeywords(entity.getExcludeKeywords());
+            try {
+                offerTodayConfigMapper.updateById(patch);
+            } catch (Exception e) {
+                log.warn("写入 OfferToday 关键词种子失败: {}", e.getMessage());
+            }
+        }
     }
 
     public OfferTodayConfig loadOfferTodayConfig() {
@@ -51,7 +85,9 @@ public class OfferTodayService {
         config.setCity(safeTrim(entity.getCity()) == null ? "香港" : safeTrim(entity.getCity()));
         config.setAccount(safeTrim(entity.getAccount()));
         config.setPassword(entity.getPassword());
-        config.setSkipLegal(entity.getSkipLegal() == null || entity.getSkipLegal());
+        seedKeywordsIfBlank(entity);
+        config.setIncludeKeywords(com.getjobs.worker.utils.KeywordFilter.parse(entity.getIncludeKeywords()));
+        config.setExcludeKeywords(com.getjobs.worker.utils.KeywordFilter.parse(entity.getExcludeKeywords()));
         config.setEnableAi(entity.getEnableAi() == null || entity.getEnableAi());
         config.setWaitTime(entity.getWaitTime() == null ? 2 : entity.getWaitTime());
         return config;
@@ -101,7 +137,8 @@ public class OfferTodayService {
             toInsert.setCity(incoming.getCity());
             toInsert.setAccount(incoming.getAccount());
             toInsert.setPassword(incoming.getPassword());
-            toInsert.setSkipLegal(incoming.getSkipLegal());
+            toInsert.setIncludeKeywords(incoming.getIncludeKeywords());
+            toInsert.setExcludeKeywords(incoming.getExcludeKeywords());
             toInsert.setEnableAi(incoming.getEnableAi());
             toInsert.setWaitTime(incoming.getWaitTime());
             toInsert.setCreatedAt(now);
@@ -115,7 +152,8 @@ public class OfferTodayService {
             if (incoming.getCity() != null) toUpdate.setCity(incoming.getCity());
             if (incoming.getAccount() != null) toUpdate.setAccount(incoming.getAccount());
             if (incoming.getPassword() != null) toUpdate.setPassword(incoming.getPassword());
-            if (incoming.getSkipLegal() != null) toUpdate.setSkipLegal(incoming.getSkipLegal());
+            if (incoming.getIncludeKeywords() != null) toUpdate.setIncludeKeywords(incoming.getIncludeKeywords());
+            if (incoming.getExcludeKeywords() != null) toUpdate.setExcludeKeywords(incoming.getExcludeKeywords());
             if (incoming.getEnableAi() != null) toUpdate.setEnableAi(incoming.getEnableAi());
             if (incoming.getWaitTime() != null) toUpdate.setWaitTime(incoming.getWaitTime());
             toUpdate.setCreatedAt(first.getCreatedAt());
@@ -135,7 +173,8 @@ public class OfferTodayService {
                 " city VARCHAR(100)," +
                 " account VARCHAR(200)," +
                 " password VARCHAR(200)," +
-                " skip_legal INTEGER DEFAULT 1," +
+                " include_keywords TEXT," +
+                " exclude_keywords TEXT," +
                 " enable_ai INTEGER DEFAULT 1," +
                 " wait_time INTEGER DEFAULT 2," +
                 " created_at DATETIME," +
@@ -155,10 +194,14 @@ public class OfferTodayService {
                 ")";
         try (Connection conn = dataSource.getConnection(); Statement stmt = conn.createStatement()) {
             stmt.execute(createConfig);
-            for (String col : new String[]{"skip_legal INTEGER DEFAULT 1", "enable_ai INTEGER DEFAULT 1", "wait_time INTEGER DEFAULT 2"}) {
+            for (String col : new String[]{"include_keywords TEXT", "exclude_keywords TEXT", "enable_ai INTEGER DEFAULT 1", "wait_time INTEGER DEFAULT 2"}) {
                 try { stmt.execute("ALTER TABLE offertoday_config ADD COLUMN " + col); } catch (Exception ignored) {}
             }
             stmt.execute(createData);
+            OfferTodayConfigEntity first = getFirstConfig();
+            if (first != null) {
+                seedKeywordsIfBlank(first);
+            }
             log.info("确保 offertoday_config / offertoday_data 表已存在");
         } catch (Exception e) {
             log.warn("创建 OfferToday 表失败: {}", e.getMessage());
