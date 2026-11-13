@@ -2,6 +2,7 @@ package com.getjobs.worker.shixiseng;
 
 import com.getjobs.application.entity.ShixisengJobDataEntity;
 import com.getjobs.application.service.ShixisengService;
+import com.getjobs.application.service.GlobalBlacklistService;
 import com.getjobs.worker.utils.Job;
 import com.getjobs.worker.utils.KeywordFilter;
 import com.getjobs.worker.utils.PlaywrightUtil;
@@ -53,6 +54,11 @@ public class ShiXiSeng {
     private static final int MAX_PAGE = 20;
 
     private final ShixisengService shixisengService;
+    private final GlobalBlacklistService globalBlacklistService;
+
+    /** 全局黑名单快照：prepare 时加载，本任务周期内复用 */
+    private volatile java.util.Set<String> blackCompanies = java.util.Set.of();
+    private volatile java.util.Set<String> blackJobs = java.util.Set.of();
 
     private static class PageJob {
         int index;
@@ -80,6 +86,9 @@ public class ShiXiSeng {
 
     public void prepare() {
         log.info("实习僧准备工作开始...");
+        blackCompanies = globalBlacklistService.getBlackCompanies();
+        blackJobs = globalBlacklistService.getBlackJobs();
+        log.info("全局黑名单已加载：公司 {} 项 / 职位 {} 项", blackCompanies.size(), blackJobs.size());
         resultList.clear();
         loginRequired = false;
         log.info("实习僧准备工作完成");
@@ -287,6 +296,15 @@ public class ShiXiSeng {
 
                 try {
                     // 通用关键词过滤：排除词命中标题/公司即跳过；必含词为空则不限标题
+                    // 全局黑名单（配置管理中心 → 全局配置）：公司/职位命中即跳过
+                    if (pj.companyName != null && blackCompanies.stream().anyMatch(pj.companyName::contains)) {
+                        log.info("命中全局公司黑名单，跳过：{} | {}", pj.companyName, pj.jobTitle);
+                        continue;
+                    }
+                    if (pj.jobTitle != null && blackJobs.stream().anyMatch(pj.jobTitle::contains)) {
+                        log.info("命中全局职位黑名单，跳过：{} | {}", pj.companyName, pj.jobTitle);
+                        continue;
+                    }
                     String excludeHit = KeywordFilter.hitExcludeWord(pj.jobTitle, pj.companyName, config.getExcludeKeywords());
                     if (excludeHit != null) {
                         log.info("命中排除关键词[{}]，跳过：{} | {}", excludeHit, pj.companyName, pj.jobTitle);

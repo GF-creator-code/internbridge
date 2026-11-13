@@ -333,6 +333,7 @@ export default function OfferTodayPage() {
                 </div>
                 <div className="mt-4 space-y-3 rounded-lg border bg-muted/20 p-4">
                   <p className="text-sm font-medium">投递行为</p>
+                    <p className="text-xs text-muted-foreground">全局黑名单（侧边栏「全局配置」）同样生效：命中的公司/职位自动跳过。</p>
                   <KeywordListsField
                     includeValue={config.includeKeywords || ''}
                     excludeValue={config.excludeKeywords || ''}
