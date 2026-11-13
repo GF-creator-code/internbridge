@@ -114,6 +114,8 @@ public class ZhilianService {
             config.setKeywords(new ArrayList<>());
             config.setCityCode("0");
             config.setSalary("0");
+            config.setIncludeKeywords(new ArrayList<>(com.getjobs.worker.utils.KeywordFilter.DEFAULT_INCLUDE));
+            config.setExcludeKeywords(new ArrayList<>(com.getjobs.worker.utils.KeywordFilter.DEFAULT_EXCLUDE));
             return config;
         }
 

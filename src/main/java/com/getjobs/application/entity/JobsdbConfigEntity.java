@@ -22,7 +22,8 @@ public class JobsdbConfigEntity {
     /** 登录账号（SEEK 邮箱） */
     private String account;
 
-    /** 登录密码 */
+    /** 登录密码（WRITE_ONLY：接口不回显，保存时仍可写入） */
+    @com.fasterxml.jackson.annotation.JsonProperty(access = com.fasterxml.jackson.annotation.JsonProperty.Access.WRITE_ONLY)
     private String password;
 
     /** 投递用简历 PDF 绝对路径 */

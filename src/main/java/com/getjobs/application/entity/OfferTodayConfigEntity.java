@@ -22,7 +22,8 @@ public class OfferTodayConfigEntity {
     /** 登录账号（邮箱或手机号） */
     private String account;
 
-    /** 登录密码 */
+    /** 登录密码（WRITE_ONLY：接口不回显，保存时仍可写入） */
+    @com.fasterxml.jackson.annotation.JsonProperty(access = com.fasterxml.jackson.annotation.JsonProperty.Access.WRITE_ONLY)
     private String password;
 
     /** 标题必含关键词（JSON 数组字符串，空 = 不限制标题） */

@@ -79,6 +79,8 @@ public class JobsdbService {
             log.warn("jobsdb_config 表为空，使用默认空配置");
             config.setKeywords(new ArrayList<>());
             config.setCity("香港");
+            config.setIncludeKeywords(new ArrayList<>(SEED_INCLUDE));
+            config.setExcludeKeywords(new ArrayList<>(com.getjobs.worker.utils.KeywordFilter.merge(com.getjobs.worker.utils.KeywordFilter.DEFAULT_EXCLUDE, SEED_EXCLUDE_EXTRA)));
             return config;
         }
         config.setKeywords(parseListString(entity.getKeywords()));

@@ -9,7 +9,7 @@ interface ToggleSwitchProps {
   onToggle: () => void
 }
 
-/** Boss 配置页同款开关：button[role=switch] + aria-checked，无外部依赖。 */
+/** 通用开关：button[role=switch] + aria-checked，无外部依赖。 */
 export default function ToggleSwitch({ id, label, checked, onToggle }: ToggleSwitchProps) {
   return (
     <button

@@ -328,7 +328,7 @@ export default function JobsdbPage() {
                     <Label>登录密码</Label>
                     <Input
                       type="password"
-                      placeholder="JobsDB 密码"
+                      placeholder="已保存，留空则不修改"
                       value={config.password || ''}
                       onChange={(e) => setConfig((c) => ({ ...c, password: e.target.value }))}
                     />

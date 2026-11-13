@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import AnalysisContent from '@/app/zhilian/analysis/AnalysisContent'
+import AnalysisContent from '@/app/shixiseng/analysis/AnalysisContent'
 import PageHeader from '@/app/components/PageHeader'
 import KeywordListsField, { parseKeywordList, serializeKeywordList } from '@/app/components/KeywordListsField'
 import { API_BASE } from '@/lib/api'
@@ -194,7 +194,7 @@ export default function ZhilianPage() {
 
   const handleSaveCookie = async () => {
     try {
-      const response = await fetch(`${API_BASE}/api/cookie/save?platform=zhilian`, { method: 'POST' })
+      const response = await fetch(`${API_BASE}/api/cookie/save?platform=shixiseng`, { method: 'POST' })
       const data = await response.json()
       setSaveResult({ success: data.success, message: data.success ? '配置保存成功。' : data.message })
       setShowSaveDialog(true)
@@ -218,7 +218,7 @@ export default function ZhilianPage() {
         body: JSON.stringify(payload),
       })
       if (response.ok) {
-        try { await fetch(`${API_BASE}/api/cookie/save?platform=zhilian`, { method: 'POST' }) } catch {}
+        try { await fetch(`${API_BASE}/api/cookie/save?platform=shixiseng`, { method: 'POST' }) } catch {}
         await fetchAllData()
         setSaveResult({ success: true, message: '保存成功，配置已更新。' })
       } else {

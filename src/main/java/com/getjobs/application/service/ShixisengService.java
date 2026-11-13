@@ -93,6 +93,8 @@ public class ShixisengService {
             log.warn("shixiseng_config 表为空，使用默认空配置");
             config.setKeywords(new ArrayList<>());
             config.setCity("北京");
+            config.setIncludeKeywords(new ArrayList<>(SEED_INCLUDE));
+            config.setExcludeKeywords(new ArrayList<>(KeywordFilter.merge(KeywordFilter.DEFAULT_EXCLUDE, SEED_EXCLUDE_EXTRA)));
             return config;
         }
         config.setKeywords(parseListString(entity.getKeywords()));

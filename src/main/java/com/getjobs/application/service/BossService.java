@@ -347,6 +347,8 @@ public class BossService {
 
         if (entity == null) {
             log.warn("boss_config 表为空，使用默认空配置");
+            config.setIncludeKeywords(new java.util.ArrayList<>(com.getjobs.worker.utils.KeywordFilter.DEFAULT_INCLUDE));
+            config.setExcludeKeywords(new java.util.ArrayList<>(com.getjobs.worker.utils.KeywordFilter.DEFAULT_EXCLUDE));
             return config;
         }
 
