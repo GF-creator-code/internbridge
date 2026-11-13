@@ -25,6 +25,18 @@ public class OfferTodayConfigEntity {
     /** 登录密码 */
     private String password;
 
+    /** 跳过法律岗 */
+    @com.baomidou.mybatisplus.annotation.TableField("skip_legal")
+    private Boolean skipLegal;
+
+    /** AI 招呼语开关 */
+    @com.baomidou.mybatisplus.annotation.TableField("enable_ai")
+    private Boolean enableAi;
+
+    /** 投递间隔（秒） */
+    @com.baomidou.mybatisplus.annotation.TableField("wait_time")
+    private Integer waitTime;
+
     /** 创建时间 */
     private LocalDateTime createdAt;
 

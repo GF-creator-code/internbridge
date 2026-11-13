@@ -28,6 +28,18 @@ public class JobsdbConfigEntity {
     /** 投递用简历 PDF 绝对路径 */
     private String resumePath;
 
+    /** 跳过法律岗 */
+    @com.baomidou.mybatisplus.annotation.TableField("skip_legal")
+    private Boolean skipLegal;
+
+    /** AI cover letter 开关 */
+    @com.baomidou.mybatisplus.annotation.TableField("enable_ai")
+    private Boolean enableAi;
+
+    /** 投递间隔（秒） */
+    @com.baomidou.mybatisplus.annotation.TableField("wait_time")
+    private Integer waitTime;
+
     /** 只采集不投递 */
     @com.baomidou.mybatisplus.annotation.TableField("collect_only")
     private Boolean collectOnly;

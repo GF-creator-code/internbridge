@@ -177,7 +177,7 @@ public class OfferToday {
                         log.info("命中硬性排除（腾讯/字节跳动），跳过：{} | {}", pj.companyName, pj.jobTitle);
                         continue;
                     }
-                    if (isLegalJob(pj.jobTitle) || isLegalJob(pj.companyName)) {
+                    if (config.isSkipLegal() && (isLegalJob(pj.jobTitle) || isLegalJob(pj.companyName))) {
                         log.info("被过滤（法律岗）：{} | {}", pj.companyName, pj.jobTitle);
                         continue;
                     }
@@ -189,7 +189,7 @@ public class OfferToday {
                     log.warn("投递失败，继续下一个岗位: {}", ex.getMessage());
                 }
 
-                PlaywrightUtil.sleep(1);
+                PlaywrightUtil.sleep(Math.max(1, config.getWaitTime()));
             }
 
             log.info("关键词【{}】投递完成，本次 {} 个", keyword, delivered);
@@ -322,7 +322,7 @@ public class OfferToday {
                 jd = jd.substring(0, 1800);
             }
 
-            String greeting = generateGreeting(keyword, pj.jobTitle, jd);
+            String greeting = config.isEnableAi() ? generateGreeting(keyword, pj.jobTitle, jd) : FALLBACK_GREETING;
             if (greeting == null) {
                 log.info("AI 判定不适合投递，跳过：{} | {}", pj.companyName, pj.jobTitle);
                 return false;

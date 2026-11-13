@@ -51,6 +51,9 @@ public class OfferTodayService {
         config.setCity(safeTrim(entity.getCity()) == null ? "香港" : safeTrim(entity.getCity()));
         config.setAccount(safeTrim(entity.getAccount()));
         config.setPassword(entity.getPassword());
+        config.setSkipLegal(entity.getSkipLegal() == null || entity.getSkipLegal());
+        config.setEnableAi(entity.getEnableAi() == null || entity.getEnableAi());
+        config.setWaitTime(entity.getWaitTime() == null ? 2 : entity.getWaitTime());
         return config;
     }
 
@@ -98,6 +101,9 @@ public class OfferTodayService {
             toInsert.setCity(incoming.getCity());
             toInsert.setAccount(incoming.getAccount());
             toInsert.setPassword(incoming.getPassword());
+            toInsert.setSkipLegal(incoming.getSkipLegal());
+            toInsert.setEnableAi(incoming.getEnableAi());
+            toInsert.setWaitTime(incoming.getWaitTime());
             toInsert.setCreatedAt(now);
             toInsert.setUpdatedAt(now);
             offerTodayConfigMapper.insert(toInsert);
@@ -109,6 +115,9 @@ public class OfferTodayService {
             if (incoming.getCity() != null) toUpdate.setCity(incoming.getCity());
             if (incoming.getAccount() != null) toUpdate.setAccount(incoming.getAccount());
             if (incoming.getPassword() != null) toUpdate.setPassword(incoming.getPassword());
+            if (incoming.getSkipLegal() != null) toUpdate.setSkipLegal(incoming.getSkipLegal());
+            if (incoming.getEnableAi() != null) toUpdate.setEnableAi(incoming.getEnableAi());
+            if (incoming.getWaitTime() != null) toUpdate.setWaitTime(incoming.getWaitTime());
             toUpdate.setCreatedAt(first.getCreatedAt());
             toUpdate.setUpdatedAt(now);
             offerTodayConfigMapper.updateById(toUpdate);
@@ -126,6 +135,9 @@ public class OfferTodayService {
                 " city VARCHAR(100)," +
                 " account VARCHAR(200)," +
                 " password VARCHAR(200)," +
+                " skip_legal INTEGER DEFAULT 1," +
+                " enable_ai INTEGER DEFAULT 1," +
+                " wait_time INTEGER DEFAULT 2," +
                 " created_at DATETIME," +
                 " updated_at DATETIME" +
                 ")";
@@ -143,6 +155,9 @@ public class OfferTodayService {
                 ")";
         try (Connection conn = dataSource.getConnection(); Statement stmt = conn.createStatement()) {
             stmt.execute(createConfig);
+            for (String col : new String[]{"skip_legal INTEGER DEFAULT 1", "enable_ai INTEGER DEFAULT 1", "wait_time INTEGER DEFAULT 2"}) {
+                try { stmt.execute("ALTER TABLE offertoday_config ADD COLUMN " + col); } catch (Exception ignored) {}
+            }
             stmt.execute(createData);
             log.info("确保 offertoday_config / offertoday_data 表已存在");
         } catch (Exception e) {

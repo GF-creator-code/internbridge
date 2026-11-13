@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import AnalysisContent from '@/app/jobsdb/analysis/AnalysisContent'
 import PageHeader from '@/app/components/PageHeader'
+import ToggleSwitch, { toBool } from '@/app/components/ToggleSwitch'
 import { API_BASE } from '@/lib/api'
 
 interface JobsdbConfig {
@@ -19,6 +20,10 @@ interface JobsdbConfig {
   account?: string
   password?: string
   resumePath?: string
+  skipLegal?: boolean
+  enableAi?: boolean
+  waitTime?: number
+  collectOnly?: boolean
 }
 
 export default function JobsdbPage() {
@@ -32,7 +37,7 @@ export default function JobsdbPage() {
   const [logoutResult, setLogoutResult] = useState<{ success: boolean; message: string } | null>(null)
   const [backendAvailable, setBackendAvailable] = useState(true)
 
-  const [config, setConfig] = useState<JobsdbConfig>({ keywords: '', city: 'Hong Kong', account: '', password: '', resumePath: '' })
+  const [config, setConfig] = useState<JobsdbConfig>({ keywords: '', city: 'Hong Kong', account: '', password: '', resumePath: '', skipLegal: true, enableAi: true, waitTime: 2, collectOnly: true })
   const [loadingConfig, setLoadingConfig] = useState(true)
 
   useEffect(() => {
@@ -114,6 +119,10 @@ export default function JobsdbPage() {
       if (data.config) {
         const normalized = { ...data.config }
         normalized.keywords = parseKeywordsFromDb(data.config.keywords)
+        normalized.skipLegal = toBool(data.config.skipLegal, true)
+        normalized.enableAi = toBool(data.config.enableAi, true)
+        normalized.collectOnly = toBool(data.config.collectOnly, true)
+        normalized.waitTime = Number(data.config.waitTime) > 0 ? Number(data.config.waitTime) : 2
         setConfig(normalized)
       }
     } catch (e) {
@@ -281,6 +290,7 @@ export default function JobsdbPage() {
               {loadingConfig ? (
                 <p className="text-sm text-muted-foreground">配置加载中...</p>
               ) : (
+                <>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2 md:col-span-2">
                     <Label>搜索关键词（逗号分隔）</Label>
@@ -324,6 +334,61 @@ export default function JobsdbPage() {
                     />
                   </div>
                 </div>
+                <div className="mt-4 space-y-3 rounded-lg border bg-muted/20 p-4">
+                  <p className="text-sm font-medium">投递行为</p>
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="space-y-1">
+                      <Label htmlFor="collectOnly" className="text-base font-medium">只采集不投递</Label>
+                      <p className="text-sm text-muted-foreground">开启后只搜索入库岗位，不打开详情页投递（表单修复前保持开启）。</p>
+                    </div>
+                    <ToggleSwitch
+                      id="collectOnly"
+                      label="只采集不投递"
+                      checked={!!config.collectOnly}
+                      onToggle={() => setConfig((c) => ({ ...c, collectOnly: !c.collectOnly }))}
+                    />
+                  </div>
+                  <div className="flex flex-col gap-3 border-t pt-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="space-y-1">
+                      <Label htmlFor="skipLegal" className="text-base font-medium">跳过法务/法律岗</Label>
+                      <p className="text-sm text-muted-foreground">开启后自动排除法务、律师、诉讼等法律类岗位。</p>
+                    </div>
+                    <ToggleSwitch
+                      id="skipLegal"
+                      label="跳过法务/法律岗"
+                      checked={!!config.skipLegal}
+                      onToggle={() => setConfig((c) => ({ ...c, skipLegal: !c.skipLegal }))}
+                    />
+                  </div>
+                  <div className="flex flex-col gap-3 border-t pt-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="space-y-1">
+                      <Label htmlFor="enableAi" className="text-base font-medium">AI 生成 Cover Letter</Label>
+                      <p className="text-sm text-muted-foreground">按岗位 JD 自动生成求职信；关闭后使用默认模板。</p>
+                    </div>
+                    <ToggleSwitch
+                      id="enableAi"
+                      label="AI 生成 Cover Letter"
+                      checked={!!config.enableAi}
+                      onToggle={() => setConfig((c) => ({ ...c, enableAi: !c.enableAi }))}
+                    />
+                  </div>
+                  <div className="flex flex-col gap-3 border-t pt-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="space-y-1">
+                      <Label htmlFor="waitTime" className="text-base font-medium">投递间隔（秒）</Label>
+                      <p className="text-sm text-muted-foreground">每两次投递之间的等待时间，建议 2–5 秒。</p>
+                    </div>
+                    <Input
+                      id="waitTime"
+                      type="number"
+                      min={1}
+                      max={30}
+                      className="w-24"
+                      value={config.waitTime ?? 2}
+                      onChange={(e) => setConfig((c) => ({ ...c, waitTime: Number(e.target.value) || 2 }))}
+                    />
+                  </div>
+                </div>
+                </>
               )}
             </CardContent>
           </Card>

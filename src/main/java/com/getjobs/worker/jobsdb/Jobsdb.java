@@ -175,7 +175,7 @@ public class Jobsdb {
                             log.info("命中硬性排除（腾讯/字节跳动），跳过：{} | {}", pj.companyName, pj.jobTitle);
                             continue;
                         }
-                        if (isLegalJob(pj.jobTitle) || isLegalJob(pj.companyName)) {
+                        if (config.isSkipLegal() && (isLegalJob(pj.jobTitle) || isLegalJob(pj.companyName))) {
                             log.info("被过滤（法律岗）：{} | {}", pj.companyName, pj.jobTitle);
                             continue;
                         }
@@ -187,7 +187,7 @@ public class Jobsdb {
                         log.warn("投递失败，继续下一个岗位: {}", ex.getMessage());
                     }
 
-                    PlaywrightUtil.sleep(1);
+                    PlaywrightUtil.sleep(Math.max(1, config.getWaitTime()));
                 }
 
                 if (delivered >= MAX_DELIVER_PER_KEYWORD) {
@@ -381,7 +381,7 @@ public class Jobsdb {
                 return false;
             }
 
-            String coverLetter = generateCoverLetter(keyword, pj.jobTitle, jd);
+            String coverLetter = config.isEnableAi() ? generateCoverLetter(keyword, pj.jobTitle, jd) : FALLBACK_COVER_LETTER;
             if (coverLetter == null) {
                 log.info("AI 判定不适合投递，跳过：{} | {}", pj.companyName, pj.jobTitle);
                 return false;

@@ -52,6 +52,9 @@ public class JobsdbService {
         config.setAccount(safeTrim(entity.getAccount()));
         config.setPassword(entity.getPassword());
         config.setResumePath(safeTrim(entity.getResumePath()));
+        config.setSkipLegal(entity.getSkipLegal() == null || entity.getSkipLegal());
+        config.setEnableAi(entity.getEnableAi() == null || entity.getEnableAi());
+        config.setWaitTime(entity.getWaitTime() == null ? 2 : entity.getWaitTime());
         config.setCollectOnly(entity.getCollectOnly() != null && entity.getCollectOnly());
         return config;
     }
@@ -101,6 +104,9 @@ public class JobsdbService {
             toInsert.setAccount(incoming.getAccount());
             toInsert.setPassword(incoming.getPassword());
             toInsert.setResumePath(incoming.getResumePath());
+            toInsert.setSkipLegal(incoming.getSkipLegal());
+            toInsert.setEnableAi(incoming.getEnableAi());
+            toInsert.setWaitTime(incoming.getWaitTime());
             toInsert.setCollectOnly(incoming.getCollectOnly());
             toInsert.setCreatedAt(now);
             toInsert.setUpdatedAt(now);
@@ -114,6 +120,9 @@ public class JobsdbService {
             if (incoming.getAccount() != null) toUpdate.setAccount(incoming.getAccount());
             if (incoming.getPassword() != null) toUpdate.setPassword(incoming.getPassword());
             if (incoming.getResumePath() != null) toUpdate.setResumePath(incoming.getResumePath());
+            if (incoming.getSkipLegal() != null) toUpdate.setSkipLegal(incoming.getSkipLegal());
+            if (incoming.getEnableAi() != null) toUpdate.setEnableAi(incoming.getEnableAi());
+            if (incoming.getWaitTime() != null) toUpdate.setWaitTime(incoming.getWaitTime());
             if (incoming.getCollectOnly() != null) toUpdate.setCollectOnly(incoming.getCollectOnly());
             toUpdate.setCreatedAt(first.getCreatedAt());
             toUpdate.setUpdatedAt(now);
@@ -133,6 +142,9 @@ public class JobsdbService {
                 " account VARCHAR(200)," +
                 " password VARCHAR(200)," +
                 " resume_path VARCHAR(500)," +
+                " skip_legal INTEGER DEFAULT 1," +
+                " enable_ai INTEGER DEFAULT 1," +
+                " wait_time INTEGER DEFAULT 2," +
                 " collect_only INTEGER DEFAULT 0," +
                 " created_at DATETIME," +
                 " updated_at DATETIME" +
@@ -151,6 +163,9 @@ public class JobsdbService {
                 ")";
         try (Connection conn = dataSource.getConnection(); Statement stmt = conn.createStatement()) {
             stmt.execute(createConfig);
+            for (String col : new String[]{"skip_legal INTEGER DEFAULT 1", "enable_ai INTEGER DEFAULT 1", "wait_time INTEGER DEFAULT 2"}) {
+                try { stmt.execute("ALTER TABLE jobsdb_config ADD COLUMN " + col); } catch (Exception ignored) {}
+            }
             stmt.execute(createData);
             try { stmt.execute("ALTER TABLE jobsdb_config ADD COLUMN collect_only INTEGER DEFAULT 0"); } catch (Exception ignored) {}
             log.info("确保 jobsdb_config / jobsdb_data 表已存在");

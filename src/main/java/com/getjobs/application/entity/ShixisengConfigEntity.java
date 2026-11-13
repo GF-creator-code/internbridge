@@ -19,6 +19,18 @@ public class ShixisengConfigEntity {
     /** 城市（中文名，直接拼进搜索 URL） */
     private String city;
 
+    /** 跳过法律岗 */
+    @com.baomidou.mybatisplus.annotation.TableField("skip_legal")
+    private Boolean skipLegal;
+
+    /** 跳过技术岗 */
+    @com.baomidou.mybatisplus.annotation.TableField("skip_technical")
+    private Boolean skipTechnical;
+
+    /** 投递间隔（秒） */
+    @com.baomidou.mybatisplus.annotation.TableField("wait_time")
+    private Integer waitTime;
+
     /** 创建时间 */
     private LocalDateTime createdAt;
 

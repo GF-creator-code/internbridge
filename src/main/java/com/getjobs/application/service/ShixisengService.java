@@ -51,6 +51,9 @@ public class ShixisengService {
         }
         config.setKeywords(parseListString(entity.getKeywords()));
         config.setCity(safeTrim(entity.getCity()) == null ? "北京" : safeTrim(entity.getCity()));
+        config.setSkipLegal(entity.getSkipLegal() == null || entity.getSkipLegal());
+        config.setSkipTechnical(entity.getSkipTechnical() == null || entity.getSkipTechnical());
+        config.setWaitTime(entity.getWaitTime() == null ? 2 : entity.getWaitTime());
         return config;
     }
 
@@ -102,6 +105,9 @@ public class ShixisengService {
             ShixisengConfigEntity toInsert = new ShixisengConfigEntity();
             toInsert.setKeywords(incoming.getKeywords());
             toInsert.setCity(incoming.getCity());
+            toInsert.setSkipLegal(incoming.getSkipLegal());
+            toInsert.setSkipTechnical(incoming.getSkipTechnical());
+            toInsert.setWaitTime(incoming.getWaitTime());
             toInsert.setCreatedAt(now);
             toInsert.setUpdatedAt(now);
             shixisengConfigMapper.insert(toInsert);
@@ -111,6 +117,9 @@ public class ShixisengService {
             toUpdate.setId(first.getId());
             if (incoming.getKeywords() != null) toUpdate.setKeywords(incoming.getKeywords());
             if (incoming.getCity() != null) toUpdate.setCity(incoming.getCity());
+            if (incoming.getSkipLegal() != null) toUpdate.setSkipLegal(incoming.getSkipLegal());
+            if (incoming.getSkipTechnical() != null) toUpdate.setSkipTechnical(incoming.getSkipTechnical());
+            if (incoming.getWaitTime() != null) toUpdate.setWaitTime(incoming.getWaitTime());
             toUpdate.setCreatedAt(first.getCreatedAt());
             toUpdate.setUpdatedAt(now);
             shixisengConfigMapper.updateById(toUpdate);
@@ -126,6 +135,9 @@ public class ShixisengService {
                 " id INTEGER PRIMARY KEY AUTOINCREMENT," +
                 " keywords VARCHAR(500)," +
                 " city VARCHAR(100)," +
+                " skip_legal INTEGER DEFAULT 1," +
+                " skip_technical INTEGER DEFAULT 1," +
+                " wait_time INTEGER DEFAULT 2," +
                 " created_at DATETIME," +
                 " updated_at DATETIME" +
                 ")";
@@ -143,6 +155,9 @@ public class ShixisengService {
                 ")";
         try (Connection conn = dataSource.getConnection(); Statement stmt = conn.createStatement()) {
             stmt.execute(createConfig);
+            for (String col : new String[]{"skip_legal INTEGER DEFAULT 1", "skip_technical INTEGER DEFAULT 1", "wait_time INTEGER DEFAULT 2"}) {
+                try { stmt.execute("ALTER TABLE shixiseng_config ADD COLUMN " + col); } catch (Exception ignored) {}
+            }
             stmt.execute(createData);
             log.info("确保 shixiseng_config / shixiseng_data 表已存在");
         } catch (Exception e) {

@@ -35,6 +35,15 @@ public class JobsdbConfig {
      */
     private String resumePath;
 
+    /** 跳过法律岗（默认开） */
+    private boolean skipLegal = true;
+
+    /** AI cover letter 开关（默认开，关闭后用固定模板） */
+    private boolean enableAi = true;
+
+    /** 每个岗位之间的投递间隔（秒，参考 Boss wait_time） */
+    private int waitTime = 2;
+
     /** 只采集岗位、不投递 */
     private boolean collectOnly;
 }
