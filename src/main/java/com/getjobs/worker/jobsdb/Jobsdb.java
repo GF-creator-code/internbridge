@@ -18,6 +18,7 @@ import org.springframework.stereotype.Component;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.regex.Pattern;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -61,13 +62,7 @@ public class Jobsdb {
     private static final int MAX_DELIVER_PER_KEYWORD = 20;
 
     private static final String FALLBACK_COVER_LETTER =
-            "Dear Hiring Manager,\n\n"
-                    + "I am Jiajie Liang, a Computer Science undergraduate at Beijing Technology and Business University "
-                    + "(Class of 2029). I have hands-on finance and data experience: as a finance intern I processed 82 ERP "
-                    + "transactions monthly, reconciled two bank accounts, and built cost reports; I also build Python/SQL "
-                    + "financial analysis tools and a quantitative research pipeline.\n\n"
-                    + "I am available three days per week for at least three months and can start immediately. "
-                    + "Thank you for your consideration.\n\nBest regards,\nJiajie Liang";
+            "Dear Hiring Team,\n\nI would like to apply for this internship. Thank you for reviewing my application. I would welcome the opportunity to discuss the role.";
 
     private final JobsdbService jobsdbService;
     private final GlobalBlacklistService globalBlacklistService;
@@ -444,10 +439,7 @@ public class Jobsdb {
             }
             log.info("JobsDB 申请表单已加载: {}", detail.url());
 
-            fillByLabel(detail, "First name", "Jiajie");
-            fillByLabel(detail, "Last name", "Liang");
-            fillHomeLocation(detail, "Hong Kong");
-            fillPhone(detail, "China (+86)", "13426841122");
+            // SEEK uses the applicant's own profile. Missing personal details must be completed on the original site.
 
             // 简历：如果表单已默认选中一份简历，直接跳过上传；否则上传 PDF
             try {
@@ -518,18 +510,6 @@ public class Jobsdb {
                 log.warn("填写 cover letter 失败: {}", e.getMessage());
             }
 
-            // 个人信息区域填完后会进入编辑态（出现 Save/Cancel），必须先 Save 再 Continue
-            try {
-                Locator saveBtn = detail.locator("button:has-text('Save')").first();
-                if (saveBtn.count() > 0 && saveBtn.isVisible()) {
-                    saveBtn.click(new Locator.ClickOptions().setTimeout(8000));
-                    PlaywrightUtil.sleep(2);
-                    log.info("JobsDB 个人信息已保存");
-                }
-            } catch (Exception e) {
-                log.debug("点击 Save 失败: {}", e.getMessage());
-            }
-
             // 逐步 Continue
             for (int step = 0; step < 2; step++) {
                 if (!clickTextButton(detail, Locators.APPLY_CONTINUE_TEXT)) {
@@ -539,7 +519,8 @@ public class Jobsdb {
                 PlaywrightUtil.sleep(3);
                 String err = visibleValidationErrors(detail);
                 if (!err.isBlank()) {
-                    log.warn("JobsDB Continue 后校验提示: {}", err);
+                    log.warn("JobsDB 申请资料尚未完整，请在原站核对后完成申请");
+                    return false;
                 }
             }
 
@@ -551,92 +532,19 @@ public class Jobsdb {
                     break;
                 }
             }
-            PlaywrightUtil.sleep(3);
-            if (!clicked) {
-                Object btns = detail.evaluate("() => [...document.querySelectorAll('button')].filter(b => b.offsetParent).map(b => (b.innerText || '').trim()).filter(Boolean).join(' | ')");
-                log.warn("JobsDB 未找到提交按钮，当前按钮: {}；校验提示: {}", btns, visibleValidationErrors(detail));
+            if (!clicked) return false;
+            // Record a delivery only after SEEK confirms receipt. A click can also return validation errors.
+            Locator confirmation = detail.getByText(Pattern.compile(
+                    "application submitted|applied for this job|successfully applied|thank you for applying",
+                    Pattern.CASE_INSENSITIVE)).first();
+            try {
+                confirmation.waitFor(new Locator.WaitForOptions().setTimeout(10000));
+                return true;
+            } catch (com.microsoft.playwright.TimeoutError timeout) {
+                return false;
             }
-
-            boolean success = containsText(detail, "Application submitted")
-                    || containsText(detail, "applied for this job")
-                    || containsText(detail, "successfully applied")
-                    || containsText(detail, "Thank you for applying")
-                    || clicked;
-            return success;
         } catch (Exception e) {
             log.warn("JobsDB 申请表单处理异常: {}", e.getMessage());
-            return false;
-        }
-    }
-
-    /**
-     * SEEK 的姓名输入框没有任何 name/aria/placeholder 属性，只能通过前面的 strong 标签定位。
-     */
-    private void fillByLabel(Page p, String label, String value) {
-        try {
-            Locator inp = p.locator("xpath=//strong[normalize-space()='" + label + "']/following::input[1]").first();
-            if (inp.count() == 0) {
-                return;
-            }
-            String cur = inp.inputValue();
-            if (cur != null && !cur.isBlank()) {
-                return;
-            }
-            inp.click();
-            inp.type(value);
-            PlaywrightUtil.sleep(1);
-            log.info("{} 已填写: {}", label, inp.inputValue());
-        } catch (Exception e) {
-            log.warn("填写 {} 失败: {}", label, e.getMessage());
-        }
-    }
-
-    private void fillHomeLocation(Page p, String value) {
-        try {
-            Locator loc = p.locator("input[aria-label='Home location']").first();
-            if (loc.count() == 0) {
-                loc = p.locator("input[placeholder*='district or area']").first();
-            }
-            if (loc.count() == 0) {
-                return;
-            }
-            loc.click();
-            loc.press("Control+a");
-            loc.press("Backspace");
-            // 必须用真实键盘输入，合成的 input 事件不会触发地点联想
-            loc.type(value);
-            PlaywrightUtil.sleep(2);
-            // 联想列表渲染有延迟，轮询等它出现再点
-            boolean picked = false;
-            for (int i = 0; i < 10 && !picked; i++) {
-                picked = jsClickExactText(p, "Hong Kong SAR")
-                        || jsClickExactText(p, "Hong Kong Island");
-                if (!picked) {
-                    PlaywrightUtil.sleep(1);
-                }
-            }
-            if (!picked) {
-                loc.press("ArrowDown");
-                loc.press("Enter");
-            }
-            PlaywrightUtil.sleep(1);
-            log.info("Home location 已填写: {}（联想点选: {}）", loc.inputValue(), picked);
-        } catch (Exception e) {
-            log.warn("填写 Home location 失败: {}", e.getMessage());
-        }
-    }
-
-    private boolean jsClickExactText(Page p, String text) {
-        try {
-            Object r = p.evaluate("(t) => {\n"
-                    + "  const els = [...document.querySelectorAll('li,div,span')]\n"
-                    + "    .filter(e => e.children.length === 0 && e.textContent && e.textContent.trim() === t && e.offsetParent);\n"
-                    + "  if (!els.length) return false;\n"
-                    + "  els[0].click();\n"
-                    + "  return true;\n"
-                    + "}", text);
-            return Boolean.TRUE.equals(r);
-        } catch (Exception e) {
             return false;
         }
     }
@@ -656,33 +564,6 @@ public class Jobsdb {
         }
     }
 
-    private void fillPhone(Page p, String countryLabel, String number) {
-        try {
-            Locator phone = p.locator("input[type='tel'], input[aria-label='Phone number']").first();
-            if (phone.count() == 0) {
-                return;
-            }
-            String cur = phone.inputValue();
-            if (cur != null && !cur.isBlank()) {
-                return;
-            }
-            Locator select = p.locator("select").first();
-            if (select.count() > 0) {
-                try {
-                    select.selectOption(countryLabel);
-                } catch (Exception ignored) {
-                }
-            }
-            jsFill(phone, number);
-        } catch (Exception e) {
-            log.warn("填写手机号失败: {}", e.getMessage());
-        }
-    }
-
-    /**
-     * 用页面内 JS 赋值 + 触发 input/change 事件。
-     * JobsDB 的 MUI 输入框在 Playwright fill 下会卡住，这里绕开原生输入链路。
-     */
     private boolean jsFill(Locator loc, String value) {
         try {
             if (loc == null || loc.count() == 0) {
@@ -756,7 +637,7 @@ public class Jobsdb {
             String introduce = (aiConfig != null && aiConfig.getIntroduce() != null) ? aiConfig.getIntroduce() : "";
             String prompt = (aiConfig != null) ? aiConfig.getPrompt() : null;
 
-            String request = (prompt != null)
+            String request = (prompt != null && !prompt.isBlank() && !prompt.equals("请在此填写AI提示词模板"))
                     ? String.format(prompt, introduce, keyword, jobName, jd, FALLBACK_COVER_LETTER)
                     : "请基于以下信息生成一段简洁的英文 cover letter（120词以内）：\n"
                     + "个人介绍：" + introduce + "\n"

@@ -5,7 +5,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -15,20 +14,11 @@ import java.util.stream.Collectors;
  * include（标题必含）：列表为空时不限制；非空时岗位标题必须包含其中任意一个词。
  * exclude（排除）：岗位标题或公司名命中其中任意一个词即跳过。
  * <p>
- * 规则本身不写在代码里——各平台的默认种子值（必含「实习」、避开法务/腾讯/字节等）
- * 由各平台 Service 在配置为空时作为数据写入，前端配置页可直接增删。
+ * 空规则保留为空，已保存的规则按各平台配置读取。
  */
 public final class KeywordFilter {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
-
-    /** 全平台共享的默认种子：岗位标题必含「实习」。 */
-    public static final List<String> DEFAULT_INCLUDE = List.of("实习");
-
-    /** 全平台共享的默认种子：避开法务/法律岗与腾讯、字节跳动及其关联主体。 */
-    public static final List<String> DEFAULT_EXCLUDE = List.of(
-            "法务", "法律", "律师", "律所", "非诉", "诉讼", "仲裁", "知识产权", "专利",
-            "腾讯", "字节");
 
     private KeywordFilter() {
     }
@@ -41,6 +31,12 @@ public final class KeywordFilter {
         if (raw == null) return new ArrayList<>();
         String s = raw.trim();
         if (s.isEmpty() || s.equals("[]")) return new ArrayList<>();
+        if (s.startsWith("\"") && s.endsWith("\"")) {
+            try {
+                String decoded = MAPPER.readValue(s, String.class).trim();
+                if (decoded.startsWith("[") && decoded.endsWith("]")) s = decoded;
+            } catch (Exception ignored) { }
+        }
         if (s.startsWith("[") && s.endsWith("]")) {
             try {
                 JsonNode arr = MAPPER.readTree(s);
@@ -116,17 +112,5 @@ public final class KeywordFilter {
             }
         }
         return null;
-    }
-
-    /** 合并去重（用于种子迁移时叠加平台特有词）。 */
-    public static List<String> merge(List<String> base, List<String> extra) {
-        List<String> out = new ArrayList<>();
-        if (base != null) out.addAll(base);
-        if (extra != null) {
-            for (String v : extra) {
-                if (v != null && !v.trim().isEmpty() && !out.contains(v.trim())) out.add(v.trim());
-            }
-        }
-        return Collections.unmodifiableList(out);
     }
 }

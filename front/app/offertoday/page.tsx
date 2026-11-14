@@ -340,7 +340,7 @@ export default function OfferTodayPage() {
                     onIncludeChange={(v) => setConfig((c) => ({ ...c, includeKeywords: v }))}
                     onExcludeChange={(v) => setConfig((c) => ({ ...c, excludeKeywords: v }))}
                     includePlaceholder="實習類型卡片已在采集层过滤，通常留空"
-                    excludePlaceholder="如：法務, 律師, 腾讯, 字節"
+                    excludePlaceholder="留空即可保留所有方向"
                   />
                   <div className="flex flex-col gap-3 border-t pt-3 sm:flex-row sm:items-center sm:justify-between">
                     <div className="space-y-1">

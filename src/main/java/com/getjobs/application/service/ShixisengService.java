@@ -31,22 +31,6 @@ public class ShixisengService {
     private final ShixisengJobDataMapper shixisengJobDataMapper;
     private final DataSource dataSource;
 
-    /**
-     * 实习僧平台种子：整站都是实习岗（必含词为空）；排除词叠加开发/算法/硬件等
-     * 纯技术方向（历史「跳过技术岗」规则的数字化迁移，可在配置页直接增删）。
-     */
-    private static final List<String> SEED_INCLUDE = new ArrayList<>();
-    private static final List<String> SEED_EXCLUDE_EXTRA = List.of(
-            "开发", "開發", "研发", "研發", "后端", "後端", "前端", "全栈", "全端",
-            "客户端", "客戶端", "服务端", "服務端", "算法工程师", "算法研究",
-            "机器学习", "機器學習", "深度学习", "深度學習", "大模型", "NLP", "自然语言", "自然語言",
-            "计算机视觉", "計算機視覺", "嵌入式", "硬件", "硬體", "芯片", "晶片", "FPGA",
-            "驱动", "驅動", "测试开发", "測試開發", "自动化测试", "自動化測試",
-            "运维", "運維", "网络工程", "網絡工程", "安全工程师", "安全工程師", "渗透", "滲透",
-            "架构师", "架構師", "Java", "C++", "Golang", "Go开发", "Python开发",
-            "数据开发", "數據開發", "大数据开发", "大數據開發", "爬虫", "爬蟲",
-            "游戏开发", "遊戲開發", "Unity", "安卓", "iOS");
-
     // ==================== 配置 ====================
 
     /** 获取第一条配置（通常只有一条） */
@@ -56,34 +40,6 @@ public class ShixisengService {
         return shixisengConfigMapper.selectOne(wrapper);
     }
 
-    /** 关键词列首次为空时写入种子值（一次性迁移，之后由用户在配置页维护） */
-    private void seedKeywordsIfBlank(ShixisengConfigEntity entity) {
-        boolean changed = false;
-        if (entity.getIncludeKeywords() == null) {
-            entity.setIncludeKeywords(com.getjobs.worker.utils.KeywordFilter.serialize(SEED_INCLUDE));
-            changed = true;
-        }
-        if (entity.getExcludeKeywords() == null) {
-            entity.setExcludeKeywords(com.getjobs.worker.utils.KeywordFilter.serialize(
-                    com.getjobs.worker.utils.KeywordFilter.merge(
-                            com.getjobs.worker.utils.KeywordFilter.DEFAULT_EXCLUDE, SEED_EXCLUDE_EXTRA)));
-            changed = true;
-        }
-        if (changed && entity.getId() != null) {
-            ShixisengConfigEntity patch = new ShixisengConfigEntity();
-            patch.setId(entity.getId());
-            patch.setIncludeKeywords(entity.getIncludeKeywords());
-            patch.setExcludeKeywords(entity.getExcludeKeywords());
-            try {
-                shixisengConfigMapper.updateById(patch);
-                log.info("实习僧关键词种子已写入（include {} 项 / exclude {} 项）",
-                        KeywordFilter.parse(entity.getIncludeKeywords()).size(),
-                        KeywordFilter.parse(entity.getExcludeKeywords()).size());
-            } catch (Exception e) {
-                log.warn("写入实习僧关键词种子失败: {}", e.getMessage());
-            }
-        }
-    }
 
     /** 从专表构建 ShiXiSengConfig */
     public ShiXiSengConfig loadShixisengConfig() {
@@ -93,13 +49,12 @@ public class ShixisengService {
             log.warn("shixiseng_config 表为空，使用默认空配置");
             config.setKeywords(new ArrayList<>());
             config.setCity("北京");
-            config.setIncludeKeywords(new ArrayList<>(SEED_INCLUDE));
-            config.setExcludeKeywords(new ArrayList<>(KeywordFilter.merge(KeywordFilter.DEFAULT_EXCLUDE, SEED_EXCLUDE_EXTRA)));
+            config.setIncludeKeywords(List.of());
+            config.setExcludeKeywords(List.of());
             return config;
         }
         config.setKeywords(parseListString(entity.getKeywords()));
         config.setCity(safeTrim(entity.getCity()) == null ? "北京" : safeTrim(entity.getCity()));
-        seedKeywordsIfBlank(entity);
         config.setIncludeKeywords(KeywordFilter.parse(entity.getIncludeKeywords()));
         config.setExcludeKeywords(KeywordFilter.parse(entity.getExcludeKeywords()));
         config.setWaitTime(entity.getWaitTime() == null ? 2 : entity.getWaitTime());
@@ -208,10 +163,6 @@ public class ShixisengService {
                 try { stmt.execute("ALTER TABLE shixiseng_config ADD COLUMN " + col); } catch (Exception ignored) {}
             }
             stmt.execute(createData);
-            ShixisengConfigEntity first = getFirstConfig();
-            if (first != null) {
-                seedKeywordsIfBlank(first);
-            }
             log.info("确保 shixiseng_config / shixiseng_data 表已存在");
         } catch (Exception e) {
             log.warn("创建实习僧表失败: {}", e.getMessage());
@@ -324,7 +275,7 @@ public class ShixisengService {
             wrapper.and(w -> w.like("company_name", kw).or().like("job_title", kw));
         }
 
-        wrapper.orderByDesc("create_time");
+        wrapper.orderByDesc("create_time", "id");
         List<ShixisengJobDataEntity> filtered = shixisengJobDataMapper.selectList(wrapper);
 
         Kpi kpi = new Kpi();
@@ -340,7 +291,15 @@ public class ShixisengService {
         charts.byStatus = new ArrayList<>();
         charts.byCity = new ArrayList<>();
         charts.byCompany = new ArrayList<>();
+        var salary = new MonthlySalarySummary();
+        filtered.forEach(job -> salary.add(job.getSalary()));
+        kpi.avgMonthlyK = salary.average();
         charts.salaryBuckets = new ArrayList<>();
+        if (kpi.avgMonthlyK != null) {
+            for (int i = 0; i < MonthlySalarySummary.LABELS.size(); i++) {
+                charts.salaryBuckets.add(new BucketValue(MonthlySalarySummary.LABELS.get(i), salary.bucket(i)));
+            }
+        }
         charts.dailyTrend = new ArrayList<>();
 
         Map<String, Long> byStatus = filtered.stream()
@@ -386,12 +345,12 @@ public class ShixisengService {
             wrapper.and(w -> w.like("company_name", kw).or().like("job_title", kw));
         }
 
-        wrapper.orderByDesc("create_time");
+        wrapper.orderByDesc("create_time", "id");
         List<ShixisengJobDataEntity> all = shixisengJobDataMapper.selectList(wrapper);
 
         int total = all.size();
-        int from = Math.max(0, (page - 1) * size);
-        int to = Math.min(total, from + size);
+        int from = (int) Math.min(total, (long) (page - 1) * size);
+        int to = (int) Math.min(total, (long) from + size);
 
         PagedResult pr = new PagedResult();
         pr.items = all.subList(from, to);

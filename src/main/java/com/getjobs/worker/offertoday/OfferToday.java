@@ -62,9 +62,7 @@ public class OfferToday {
     private static final int MAX_DELIVER_PER_KEYWORD = 30;
 
     private static final String FALLBACK_GREETING =
-            "您好，我是北京工商大学计算机科学与技术专业 2029 届本科生梁家杰，"
-                    + "可每周到岗三天、连续实习三个月以上，熟悉 Python/SQL 与数据分析，"
-                    + "希望有机会进一步沟通，谢谢！";
+            "您好，我對這個實習職位感興趣，希望有機會進一步了解工作內容。謝謝您審閱我的申請。";
 
     private final OfferTodayService offerTodayService;
     private final GlobalBlacklistService globalBlacklistService;
@@ -498,7 +496,7 @@ public class OfferToday {
             String introduce = (aiConfig != null && aiConfig.getIntroduce() != null) ? aiConfig.getIntroduce() : "";
             String prompt = (aiConfig != null) ? aiConfig.getPrompt() : null;
 
-            String request = (prompt != null)
+            String request = (prompt != null && !prompt.isBlank() && !prompt.equals("请在此填写AI提示词模板"))
                     ? String.format(prompt, introduce, keyword, jobName, jd, FALLBACK_GREETING)
                     : "请基于以下信息生成简洁友好的中文打招呼语，不超过80字：\n"
                     + "个人介绍：" + introduce + "\n"

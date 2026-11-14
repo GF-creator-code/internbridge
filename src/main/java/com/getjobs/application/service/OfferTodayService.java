@@ -30,14 +30,6 @@ public class OfferTodayService {
     private final OfferTodayJobDataMapper offerTodayJobDataMapper;
     private final DataSource dataSource;
 
-    /**
-     * OfferToday（香港）种子：崗位卡片已按「實習」类型过滤（必含词为空）；
-     * 排除词在共享默认之上叠加繁体法务词与「字節」，适配香港站繁体岗位标题。
-     */
-    private static final List<String> SEED_INCLUDE = new ArrayList<>();
-    private static final List<String> SEED_EXCLUDE_EXTRA = List.of(
-            "字節", "法務", "律師", "非訴", "訴訟", "知識產權", "專利", "法證", "法证", "Forensic");
-
     // ==================== 配置 ====================
 
     public OfferTodayConfigEntity getFirstConfig() {
@@ -46,31 +38,6 @@ public class OfferTodayService {
         return offerTodayConfigMapper.selectOne(wrapper);
     }
 
-    /** 关键词列首次为空时写入种子值（一次性迁移，之后由用户在配置页维护） */
-    private void seedKeywordsIfBlank(OfferTodayConfigEntity entity) {
-        boolean changed = false;
-        if (entity.getIncludeKeywords() == null) {
-            entity.setIncludeKeywords(com.getjobs.worker.utils.KeywordFilter.serialize(SEED_INCLUDE));
-            changed = true;
-        }
-        if (entity.getExcludeKeywords() == null) {
-            entity.setExcludeKeywords(com.getjobs.worker.utils.KeywordFilter.serialize(
-                    com.getjobs.worker.utils.KeywordFilter.merge(
-                            com.getjobs.worker.utils.KeywordFilter.DEFAULT_EXCLUDE, SEED_EXCLUDE_EXTRA)));
-            changed = true;
-        }
-        if (changed && entity.getId() != null) {
-            OfferTodayConfigEntity patch = new OfferTodayConfigEntity();
-            patch.setId(entity.getId());
-            patch.setIncludeKeywords(entity.getIncludeKeywords());
-            patch.setExcludeKeywords(entity.getExcludeKeywords());
-            try {
-                offerTodayConfigMapper.updateById(patch);
-            } catch (Exception e) {
-                log.warn("写入 OfferToday 关键词种子失败: {}", e.getMessage());
-            }
-        }
-    }
 
     public OfferTodayConfig loadOfferTodayConfig() {
         OfferTodayConfigEntity entity = getFirstConfig();
@@ -79,15 +46,14 @@ public class OfferTodayService {
             log.warn("offertoday_config 表为空，使用默认空配置");
             config.setKeywords(new ArrayList<>());
             config.setCity("香港");
-            config.setIncludeKeywords(new ArrayList<>(SEED_INCLUDE));
-            config.setExcludeKeywords(new ArrayList<>(com.getjobs.worker.utils.KeywordFilter.merge(com.getjobs.worker.utils.KeywordFilter.DEFAULT_EXCLUDE, SEED_EXCLUDE_EXTRA)));
+            config.setIncludeKeywords(List.of());
+            config.setExcludeKeywords(List.of());
             return config;
         }
         config.setKeywords(parseListString(entity.getKeywords()));
         config.setCity(safeTrim(entity.getCity()) == null ? "香港" : safeTrim(entity.getCity()));
         config.setAccount(safeTrim(entity.getAccount()));
         config.setPassword(entity.getPassword());
-        seedKeywordsIfBlank(entity);
         config.setIncludeKeywords(com.getjobs.worker.utils.KeywordFilter.parse(entity.getIncludeKeywords()));
         config.setExcludeKeywords(com.getjobs.worker.utils.KeywordFilter.parse(entity.getExcludeKeywords()));
         config.setEnableAi(entity.getEnableAi() == null || entity.getEnableAi());
@@ -153,7 +119,7 @@ public class OfferTodayService {
             if (incoming.getKeywords() != null) toUpdate.setKeywords(incoming.getKeywords());
             if (incoming.getCity() != null) toUpdate.setCity(incoming.getCity());
             if (incoming.getAccount() != null) toUpdate.setAccount(incoming.getAccount());
-            if (incoming.getPassword() != null) toUpdate.setPassword(incoming.getPassword());
+            if (incoming.getPassword() != null && !incoming.getPassword().isBlank()) toUpdate.setPassword(incoming.getPassword());
             if (incoming.getIncludeKeywords() != null) toUpdate.setIncludeKeywords(incoming.getIncludeKeywords());
             if (incoming.getExcludeKeywords() != null) toUpdate.setExcludeKeywords(incoming.getExcludeKeywords());
             if (incoming.getEnableAi() != null) toUpdate.setEnableAi(incoming.getEnableAi());
@@ -200,10 +166,6 @@ public class OfferTodayService {
                 try { stmt.execute("ALTER TABLE offertoday_config ADD COLUMN " + col); } catch (Exception ignored) {}
             }
             stmt.execute(createData);
-            OfferTodayConfigEntity first = getFirstConfig();
-            if (first != null) {
-                seedKeywordsIfBlank(first);
-            }
             log.info("确保 offertoday_config / offertoday_data 表已存在");
         } catch (Exception e) {
             log.warn("创建 OfferToday 表失败: {}", e.getMessage());
@@ -314,7 +276,7 @@ public class OfferTodayService {
             wrapper.and(w -> w.like("company_name", kw).or().like("job_title", kw));
         }
 
-        wrapper.orderByDesc("create_time");
+        wrapper.orderByDesc("create_time", "id");
         List<OfferTodayJobDataEntity> filtered = offerTodayJobDataMapper.selectList(wrapper);
 
         Kpi kpi = new Kpi();
@@ -330,7 +292,15 @@ public class OfferTodayService {
         charts.byStatus = new ArrayList<>();
         charts.byCity = new ArrayList<>();
         charts.byCompany = new ArrayList<>();
+        var salary = new MonthlySalarySummary();
+        filtered.forEach(job -> salary.add(job.getSalary()));
+        kpi.avgMonthlyK = salary.average();
         charts.salaryBuckets = new ArrayList<>();
+        if (kpi.avgMonthlyK != null) {
+            for (int i = 0; i < MonthlySalarySummary.LABELS.size(); i++) {
+                charts.salaryBuckets.add(new BucketValue(MonthlySalarySummary.LABELS.get(i), salary.bucket(i)));
+            }
+        }
         charts.dailyTrend = new ArrayList<>();
 
         Map<String, Long> byStatus = filtered.stream()
@@ -375,12 +345,12 @@ public class OfferTodayService {
             wrapper.and(w -> w.like("company_name", kw).or().like("job_title", kw));
         }
 
-        wrapper.orderByDesc("create_time");
+        wrapper.orderByDesc("create_time", "id");
         List<OfferTodayJobDataEntity> all = offerTodayJobDataMapper.selectList(wrapper);
 
         int total = all.size();
-        int from = Math.max(0, (page - 1) * size);
-        int to = Math.min(total, from + size);
+        int from = (int) Math.min(total, (long) (page - 1) * size);
+        int to = (int) Math.min(total, (long) from + size);
 
         PagedResult pr = new PagedResult();
         pr.items = all.subList(from, to);

@@ -52,5 +52,5 @@ public class JobsdbConfig {
     private int waitTime = 2;
 
     /** 只采集岗位、不投递 */
-    private boolean collectOnly;
+    private boolean collectOnly = true;
 }

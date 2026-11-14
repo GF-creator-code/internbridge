@@ -47,6 +47,10 @@ class DefaultPageConfigInitializerTest {
         assertTrue(jdbc.queryForObject("SELECT keywords FROM boss_config", String.class).contains("实习"));
         assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM boss_blacklist", Integer.class));
         assertEquals(1, jdbc.queryForObject("SELECT collect_only FROM jobsdb_config", Integer.class));
+        for (String platform : List.of("jobsdb_config", "offertoday_config", "shixiseng_config")) {
+            assertEquals("[]", jdbc.queryForObject("SELECT include_keywords FROM " + platform, String.class));
+            assertEquals("[]", jdbc.queryForObject("SELECT exclude_keywords FROM " + platform, String.class));
+        }
         assertEquals("", jdbc.queryForObject("SELECT introduce FROM ai", String.class));
         assertEquals(5, jdbc.queryForObject("SELECT prompt FROM ai", String.class).split("%s", -1).length - 1);
         assertEquals("existing-session", jdbc.queryForObject("SELECT value FROM cookie", String.class));

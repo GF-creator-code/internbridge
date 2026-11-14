@@ -37,7 +37,9 @@ export default function JobsdbPage() {
   const [saveResult, setSaveResult] = useState<{ success: boolean; message: string } | null>(null)
   const [showLogoutResultDialog, setShowLogoutResultDialog] = useState(false)
   const [logoutResult, setLogoutResult] = useState<{ success: boolean; message: string } | null>(null)
-  const [backendAvailable, setBackendAvailable] = useState(true)
+  const [savedConfig, setSavedConfig] = useState<JobsdbConfig | null>(null)
+  const [savingConfig, setSavingConfig] = useState(false)
+  const [taskMessage, setTaskMessage] = useState('')
 
   const [config, setConfig] = useState<JobsdbConfig>({ keywords: '', city: 'Hong Kong', account: '', password: '', resumePath: '', includeKeywords: '', excludeKeywords: '', enableAi: true, waitTime: 2, collectOnly: true })
   const [loadingConfig, setLoadingConfig] = useState(true)
@@ -114,22 +116,25 @@ export default function JobsdbPage() {
     return JSON.stringify(tokens)
   }
 
+  const dirty = savedConfig !== null && (Object.keys(config) as (keyof JobsdbConfig)[]).some(key => savedConfig[key] !== config[key])
+
   const fetchAllData = async () => {
+    setLoadingConfig(true)
     try {
       const res = await fetch(`${API_BASE}/api/jobsdb/config`)
       const data = await res.json()
-      if (data.config) {
-        const normalized = { ...data.config }
-        normalized.keywords = parseKeywordsFromDb(data.config.keywords)
-        normalized.includeKeywords = parseKeywordList(data.config.includeKeywords)
-        normalized.excludeKeywords = parseKeywordList(data.config.excludeKeywords)
-        normalized.enableAi = toBool(data.config.enableAi, true)
-        normalized.collectOnly = toBool(data.config.collectOnly, true)
-        normalized.waitTime = Number(data.config.waitTime) > 0 ? Number(data.config.waitTime) : 2
-        setConfig(normalized)
-      }
+      if (!res.ok || !data.config) throw new Error()
+      const normalized = { ...data.config }
+      normalized.keywords = parseKeywordsFromDb(data.config.keywords)
+      normalized.includeKeywords = parseKeywordList(data.config.includeKeywords)
+      normalized.excludeKeywords = parseKeywordList(data.config.excludeKeywords)
+      normalized.enableAi = toBool(data.config.enableAi, true)
+      normalized.collectOnly = toBool(data.config.collectOnly, true)
+      normalized.waitTime = Number(data.config.waitTime) > 0 ? Number(data.config.waitTime) : 2
+      setConfig(normalized)
+      setSavedConfig(normalized)
     } catch (e) {
-      console.error('[JobsDB] 获取配置失败:', e)
+      setSavedConfig(null)
     } finally {
       setLoadingConfig(false)
     }
@@ -138,30 +143,28 @@ export default function JobsdbPage() {
   useEffect(() => { fetchAllData() }, [])
 
   useEffect(() => {
-    (async () => {
+    const controller = new AbortController()
+    const readStatus = async () => {
       try {
-        const res = await fetch(`${API_BASE}/api/jobsdb/config`, { method: 'GET' })
-        const ok = !!res && res.ok
-        setBackendAvailable(ok)
-        if (ok) {
-          await fetchAllData()
-        } else {
-          setLoadingConfig(false)
-        }
-      } catch (e) {
-        setBackendAvailable(false)
-        setLoadingConfig(false)
-      }
-    })()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        const response = await fetch(API_BASE + '/api/jobsdb/status', { signal: controller.signal })
+        const data = await response.json()
+        if (!controller.signal.aborted && response.ok && typeof data.isRunning === 'boolean') setIsDelivering(data.isRunning)
+      } catch { /* The next refresh will retry. */ }
+    }
+    void readStatus()
+    const interval = setInterval(readStatus, 5000)
+    return () => { controller.abort(); clearInterval(interval) }
   }, [])
 
   const handleLogin = async () => {
     try {
       setCheckingLogin(true)
-      await fetch(`${API_BASE}/api/jobsdb/login`, { method: 'POST' })
+      setTaskMessage('')
+      const response = await fetch(API_BASE + '/api/jobsdb/login', { method: 'POST' })
+      if (!response.ok) throw new Error()
+      setTaskMessage('请在打开的招聘网站窗口完成登录。')
     } catch (error) {
-      console.error('[JobsDB] 触发登录失败:', error)
+      setTaskMessage('未能打开登录窗口，请检查本地服务后重试。')
     } finally {
       setTimeout(() => setCheckingLogin(false), 3000)
     }
@@ -169,11 +172,14 @@ export default function JobsdbPage() {
 
   const handleStartDelivery = async () => {
     try {
+      if (!savedConfig || dirty) return
+      setTaskMessage('')
       setIsDelivering(true)
       const response = await fetch(`${API_BASE}/api/jobsdb/start`, { method: 'POST' })
       const data = await response.json()
-      if (!data.success) setIsDelivering(false)
+      if (!response.ok || !data.success) throw new Error(data.message || '任务启动失败，请重试。')
     } catch (error) {
+      setTaskMessage(error instanceof Error && !(error instanceof TypeError) ? error.message : '无法启动任务，请检查本地服务。')
       setIsDelivering(false)
     }
   }
@@ -182,15 +188,17 @@ export default function JobsdbPage() {
     try {
       const response = await fetch(`${API_BASE}/api/jobsdb/stop`, { method: 'POST' })
       const data = await response.json()
-      if (data.success) setIsDelivering(false)
-    } catch (error) {}
+      if (!response.ok || !data.success) throw new Error(data.message || '未能停止任务。')
+      setIsDelivering(false)
+      setTaskMessage('已请求停止任务。')
+    } catch (error) { setTaskMessage(error instanceof Error && !(error instanceof TypeError) ? error.message : '请检查本地服务后重试。') }
   }
 
   const triggerLogout = async () => {
     try {
       const response = await fetch(`${API_BASE}/api/jobsdb/logout`, { method: 'POST' })
       const data = await response.json()
-      setIsLoggedIn(false)
+      if (data.success) setIsLoggedIn(false)
       setLogoutResult({ success: data.success, message: data.success ? '已退出登录，Cookie已清空。' : data.message })
       setShowLogoutResultDialog(true)
     } catch (error) {
@@ -200,9 +208,12 @@ export default function JobsdbPage() {
   }
 
   const handleSaveConfig = async () => {
+    if (!savedConfig || savingConfig) return
+    setSavingConfig(true)
     try {
       const payload = {
         ...config,
+        password: config.password || undefined,
         keywords: serializeKeywordsForDb(config.keywords),
         includeKeywords: serializeKeywordList(config.includeKeywords),
         excludeKeywords: serializeKeywordList(config.excludeKeywords),
@@ -214,7 +225,9 @@ export default function JobsdbPage() {
       })
       if (response.ok) {
         try { await fetch(`${API_BASE}/api/cookie/save?platform=jobsdb`, { method: 'POST' }) } catch {}
-        await fetchAllData()
+        const updated = { ...config, password: undefined }
+        setConfig(updated)
+        setSavedConfig(updated)
         setSaveResult({ success: true, message: '保存成功，配置已更新。' })
       } else {
         setSaveResult({ success: false, message: '保存失败：后端返回异常状态。' })
@@ -224,7 +237,7 @@ export default function JobsdbPage() {
       console.error('[JobsDB] 保存配置失败:', error)
       setSaveResult({ success: false, message: '保存失败：网络或服务异常。' })
       setShowSaveDialog(true)
-    }
+    } finally { setSavingConfig(false) }
   }
 
   return (
@@ -232,7 +245,7 @@ export default function JobsdbPage() {
       <PageHeader
         icon={<BiBriefcase className="text-2xl" />}
         title="JobsDB 配置"
-        subtitle="香港实习岗自动投递（SEEK Quick apply）"
+        subtitle="采集香港实习，在「投递分析」里打开原站职位。"
         iconClass="text-white"
         accentBgClass="bg-violet-600"
         actions={
@@ -247,23 +260,26 @@ export default function JobsdbPage() {
               </Button>
             ) : isDelivering ? (
               <Button onClick={handleStopDelivery} size="sm" className="rounded-full bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 text-white px-4 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105">
-                <BiStop className="mr-1" /> 停止投递
+                <BiStop className="mr-1" /> 停止任务
               </Button>
             ) : (
-              <Button onClick={handleStartDelivery} size="sm" className="rounded-full bg-gradient-to-r from-teal-500 to-green-500 hover:from-teal-600 hover:to-green-600 text-white px-4 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105">
-                <BiPlay className="mr-1" /> 开始投递
+              <Button disabled={!savedConfig || dirty || savingConfig} onClick={handleStartDelivery} size="sm" className="rounded-full bg-gradient-to-r from-teal-500 to-green-500 hover:from-teal-600 hover:to-green-600 text-white px-4 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105">
+                <BiPlay className="mr-1" /> {savedConfig?.collectOnly ? '开始采集' : '开始投递'}
               </Button>
             )}
-            <Button onClick={() => setShowLogoutDialog(true)} size="sm" className="rounded-full bg-gradient-to-r from-red-500 to-pink-500 hover:from-red-600 hover:to-pink-600 text-white px-4 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105">
+            {isLoggedIn && <Button onClick={() => setShowLogoutDialog(true)} size="sm" className="rounded-full bg-gradient-to-r from-red-500 to-pink-500 hover:from-red-600 hover:to-pink-600 text-white px-4 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105">
               <BiLogOut className="mr-1" /> 退出登录
-            </Button>
-            <Button onClick={handleSaveConfig} size="sm" className="rounded-full bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 text-white px-4 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105">
+            </Button>}
+            <Button disabled={!savedConfig || !dirty || savingConfig} onClick={handleSaveConfig} size="sm" className="rounded-full bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 text-white px-4 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105">
               <BiSave className="mr-1" /> 保存配置
             </Button>
           </div>
         }
       />
 
+      {taskMessage && <p role="status" className="text-sm">{taskMessage}</p>}
+      {dirty && <p role="status" className="text-sm">有未保存的配置，请先保存再开始任务。</p>}
+      {!loadingConfig && !savedConfig && <div role="alert">未能读取 JobsDB 配置。<Button variant="outline" onClick={fetchAllData}>重新读取</Button></div>}
       <Tabs defaultValue="config" className="w-full">
         <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="config">平台配置</TabsTrigger>
@@ -281,8 +297,8 @@ export default function JobsdbPage() {
             <CardContent>
               <div className="space-y-4">
                 <p className="text-sm text-muted-foreground">JobsDB 是香港招聘平台，岗位全部在香港，薪资以 HKD 计。</p>
-                <p className="text-sm text-muted-foreground">填好账号密码后点「登录 JobsDB」，系统会自动登录并保存 Cookie；失败时请在浏览器窗口手动完成。</p>
-                <p className="text-sm text-muted-foreground">投递只针对卡片类型为「實習」的岗位，招呼语按 JD 用 AI 生成。</p>
+                <p className="text-sm text-muted-foreground">保存账号密码后点「登录 JobsDB」，系统会自动登录并保存 Cookie；失败时请在浏览器窗口手动完成。</p>
+                <p className="text-sm text-muted-foreground">默认只采集。到「投递分析」点岗位名称可在原站申请。实验性 Quick apply 使用 SEEK 账户内的个人资料，姓名、电话和居住地请先在原站填写。</p>
               </div>
             </CardContent>
           </Card>
@@ -295,38 +311,38 @@ export default function JobsdbPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              {loadingConfig ? (
-                <p className="text-sm text-muted-foreground">配置加载中...</p>
+              {loadingConfig || !savedConfig ? (
+                <p className="text-sm text-muted-foreground">{loadingConfig ? '配置加载中…' : '请先重新读取配置。'}</p>
               ) : (
-                <>
+                <fieldset disabled={savingConfig}>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2 md:col-span-2">
-                    <Label>搜索关键词（逗号分隔）</Label>
-                    <Input
-                      placeholder="如：實習, 數據分析, 市場營銷, 金融, 會計"
+                    <Label htmlFor="jobsdb-keywords">搜索关键词（逗号分隔）</Label>
+                    <Input id="jobsdb-keywords"
+                      placeholder="如：internship, summer intern"
                       value={config.keywords || ''}
                       onChange={(e) => setConfig((c) => ({ ...c, keywords: e.target.value }))}
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label>城市</Label>
-                    <Input
+                    <Label htmlFor="jobsdb-city">城市</Label>
+                    <Input id="jobsdb-city"
                       placeholder="香港"
                       value={config.city || ''}
                       onChange={(e) => setConfig((c) => ({ ...c, city: e.target.value }))}
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label>登录账号（邮箱或手机号）</Label>
-                    <Input
+                    <Label htmlFor="jobsdb-account">登录账号（邮箱或手机号）</Label>
+                    <Input id="jobsdb-account"
                       placeholder="JobsDB 账号"
                       value={config.account || ''}
                       onChange={(e) => setConfig((c) => ({ ...c, account: e.target.value }))}
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label>登录密码</Label>
-                    <Input
+                    <Label htmlFor="jobsdb-password">登录密码</Label>
+                    <Input id="jobsdb-password"
                       type="password"
                       placeholder="已保存，留空则不修改"
                       value={config.password || ''}
@@ -334,9 +350,9 @@ export default function JobsdbPage() {
                     />
                   </div>
                   <div className="space-y-2 md:col-span-2">
-                    <Label>投递简历 PDF 路径</Label>
-                    <Input
-                      placeholder="C:/Users/25345/Documents/New project/output/resume_zh/梁家杰_商科简历_财务金融.pdf"
+                    <Label htmlFor="jobsdb-resumePath">投递简历 PDF 路径</Label>
+                    <Input id="jobsdb-resumePath"
+                      placeholder="例如 C:/Resumes/internship.pdf"
                       value={config.resumePath || ''}
                       onChange={(e) => setConfig((c) => ({ ...c, resumePath: e.target.value }))}
                     />
@@ -348,7 +364,7 @@ export default function JobsdbPage() {
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div className="space-y-1">
                       <Label htmlFor="collectOnly" className="text-base font-medium">只采集不投递</Label>
-                      <p className="text-sm text-muted-foreground">开启后只搜索入库岗位，不打开详情页投递（表单修复前保持开启）。</p>
+                      <p className="text-sm text-muted-foreground">开启后只保存岗位记录。关闭并保存才会切换为实验性投递。</p>
                     </div>
                     <ToggleSwitch
                       id="collectOnly"
@@ -364,7 +380,7 @@ export default function JobsdbPage() {
                       onIncludeChange={(v) => setConfig((c) => ({ ...c, includeKeywords: v }))}
                       onExcludeChange={(v) => setConfig((c) => ({ ...c, excludeKeywords: v }))}
                       includePlaceholder="如：internship, graduate"
-                      excludePlaceholder="如：legal, lawyer, Tencent"
+                      excludePlaceholder="留空即可保留所有方向"
                     />
                   </div>
                   <div className="flex flex-col gap-3 border-t pt-3 sm:flex-row sm:items-center sm:justify-between">
@@ -395,7 +411,7 @@ export default function JobsdbPage() {
                     />
                   </div>
                 </div>
-                </>
+                </fieldset>
               )}
             </CardContent>
           </Card>

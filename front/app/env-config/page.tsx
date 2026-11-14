@@ -1,302 +1,107 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { BiSave, BiKey, BiLinkExternal, BiCodeAlt, BiInfoCircle } from 'react-icons/bi'
+import Link from 'next/link'
+import { useEffect, useState } from 'react'
+import { BiCodeAlt, BiSave } from 'react-icons/bi'
+import PageHeader from '@/app/components/PageHeader'
+import ToggleSwitch, { toBool } from '@/app/components/ToggleSwitch'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import PageHeader from '@/app/components/PageHeader'
 import { API_BASE } from '@/lib/api'
 
+type Config = { BASE_URL: string; API_KEY: string; MODEL: string; HOOK_URL: string; BOT_IS_SEND: string }
+const empty: Config = { BASE_URL: '', API_KEY: '', MODEL: '', HOOK_URL: '', BOT_IS_SEND: '0' }
+
 export default function EnvConfig() {
-  const [envConfig, setEnvConfig] = useState({
-    hookUrl: '',
-    baseUrl: '',
-    apiKey: '',
-    model: '',
-    botIsSend: 0,
-  })
-
-  const [showApiKey, setShowApiKey] = useState(false)
-  const [loading, setLoading] = useState(true)
+  const [draft, setDraft] = useState(empty)
+  const [saved, setSaved] = useState<Config | null>(null)
+  const [loadError, setLoadError] = useState(false)
+  const [showKey, setShowKey] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [showSaveDialog, setShowSaveDialog] = useState(false)
-  const [saveResult, setSaveResult] = useState<{ success: boolean; message: string } | null>(null)
+  const [message, setMessage] = useState('')
+  const dirty = saved !== null && (Object.keys(empty) as (keyof Config)[]).some(key => saved[key] !== draft[key])
 
-  // 从数据库加载配置
-  const fetchConfig = async () => {
+  async function load() {
+    setLoadError(false)
     try {
-      setLoading(true)
-      const response = await fetch(`${API_BASE}/api/config`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      })
-
-      if (!response.ok) {
-        throw new Error('获取配置失败')
-      }
-
-      const result = await response.json()
-
-      if (result.success && result.data) {
-        setEnvConfig({
-          hookUrl: result.data.HOOK_URL || '',
-          baseUrl: result.data.BASE_URL || '',
-          apiKey: result.data.API_KEY || '',
-          model: result.data.MODEL || '',
-          botIsSend: (() => {
-            const raw = result.data.BOT_IS_SEND
-            const val = String(raw ?? '').trim().toLowerCase()
-            return val === '1' || val === 'true' ? 1 : 0
-          })(),
-        })
-      }
-    } catch (error) {
-      console.error('获取配置失败:', error)
-      alert('获取配置失败，请检查后端服务是否正常运行')
-    } finally {
-      setLoading(false)
-    }
+      const res = await fetch(API_BASE + '/api/config')
+      if (!res.ok) throw new Error()
+      const body = await res.json()
+      if (!body.success || !body.data) throw new Error()
+      const config = { BASE_URL: body.data.BASE_URL || '', API_KEY: body.data.API_KEY || '', MODEL: body.data.MODEL || '',
+        HOOK_URL: body.data.HOOK_URL || '', BOT_IS_SEND: toBool(body.data.BOT_IS_SEND) ? '1' : '0' }
+      setDraft(config)
+      setSaved(config)
+    } catch { setLoadError(true) }
   }
 
-  useEffect(() => {
-    fetchConfig()
-  }, [])
+  useEffect(() => { void load() }, [])
 
-  const handleSave = async (silent: boolean = false) => {
-    try {
-      setSaving(true)
-
-      const configMap = {
-        HOOK_URL: envConfig.hookUrl,
-        BASE_URL: envConfig.baseUrl,
-        API_KEY: envConfig.apiKey,
-        MODEL: envConfig.model,
-        BOT_IS_SEND: String(envConfig.botIsSend ?? 0),
-      }
-
-      const response = await fetch(`${API_BASE}/api/config`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(configMap),
-      })
-
-      if (!response.ok) {
-        throw new Error('保存配置失败')
-      }
-
-      const result = await response.json()
-
-      if (result.success) {
-        if (!silent) {
-          setSaveResult({ success: true, message: '保存成功' })
-          setShowSaveDialog(true)
-        }
-      } else {
-        throw new Error(result.message || '保存配置失败')
-      }
-    } catch (error) {
-      console.error('保存配置失败:', error)
-      if (!silent) {
-        setSaveResult({ success: false, message: '保存配置失败：网络或服务异常。' })
-        setShowSaveDialog(true)
-      }
-    } finally {
-      setSaving(false)
-    }
+  function update(key: keyof Config, value: string) {
+    setMessage('')
+    setDraft(previous => ({ ...previous, [key]: value }))
   }
 
-  return (
-    <div className="space-y-6">
-      <PageHeader
-        icon={<BiCodeAlt className="text-2xl" />}
-        title="环境变量配置"
-        subtitle=".env_template 环境变量管理"
-        actions={
-          <Button
-            onClick={() => handleSave(false)}
-            size="sm"
-            className="rounded-full bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 text-white px-4 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105"
-          >
-            <BiSave className="mr-1" /> 保存配置
-          </Button>
-        }
-      />
+  async function save() {
+    if (!saved || !dirty || saving) return
+    setSaving(true)
+    setMessage('')
+    try {
+      const changes = Object.fromEntries(Object.entries(draft).filter(([key, value]) => saved[key as keyof Config] !== value))
+      const res = await fetch(API_BASE + '/api/config', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(changes),
+      })
+      if (!res.ok || !(await res.json()).success) throw new Error()
+      setSaved(draft)
+      setMessage('配置已保存。')
+    } catch { setMessage('保存失败，输入仍在本页。请检查本地服务后重试。') }
+    finally { setSaving(false) }
+  }
 
-      {loading && (
-        <Card className="border-blue-500/20 bg-blue-500/5">
-          <CardContent className="pt-6">
-            <p className="text-center text-sm text-muted-foreground">加载配置中...</p>
-          </CardContent>
-        </Card>
-      )}
-
-      <div className="space-y-6">
-        {/* 企业微信 Webhook */}
-        <Card className="animate-in fade-in slide-in-from-bottom-5 duration-700">
-          <CardHeader className="flex items-start gap-4">
-            <div className="min-w-0 space-y-2">
-              <CardTitle className="flex items-center gap-2">
-                <BiLinkExternal className="text-primary" />
-                企业微信 Webhook
-              </CardTitle>
-              <CardDescription>配置企业微信群机器人，用于接收通知消息</CardDescription>
-            </div>
-            <div>
-              <button
-                type="button"
-                aria-label="企业微信发送开关"
-                onClick={() => setEnvConfig({ ...envConfig, botIsSend: envConfig.botIsSend ? 0 : 1 })}
-                className={`relative inline-flex h-7 w-14 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-400/40 border border-white/30 shadow-[inset_0_1px_0_rgba(255,255,255,.25)] ${envConfig.botIsSend ? 'bg-emerald-500/80 hover:bg-emerald-500' : 'bg-white/10 hover:bg-white/15'}`}
-              >
-                <span
-                  className={`absolute top-1 left-1 h-5 w-5 rounded-full bg-white shadow transition-transform ${envConfig.botIsSend ? 'translate-x-7' : 'translate-x-0'}`}
-                />
-              </button>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              <Label htmlFor="hookUrl">Webhook URL</Label>
-              <Input
-                id="hookUrl"
-                type="text"
-                value={envConfig.hookUrl}
-                onChange={(e) => setEnvConfig({ ...envConfig, hookUrl: e.target.value })}
-                placeholder="https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=your_key"
-              />
-              <p className="text-xs text-muted-foreground">
-                企业微信群机器人webhook地址，用于接收通知消息
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* API 配置 */}
-        <Card className="animate-in fade-in slide-in-from-bottom-6 duration-700">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <BiCodeAlt className="text-primary" />
-              API 配置
-            </CardTitle>
-            <CardDescription>配置 API 服务器地址和使用的 AI 模型</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-2">
-                <Label htmlFor="baseUrl">API Base URL</Label>
-                <Input
-                  id="baseUrl"
-                  type="text"
-                  value={envConfig.baseUrl}
-                  onChange={(e) => setEnvConfig({ ...envConfig, baseUrl: e.target.value })}
-                  placeholder="https://api.ruyun.fun"
-                />
-                <p className="text-xs text-muted-foreground">API服务器地址</p>
+  return <div className="space-y-5">
+    <PageHeader icon={<BiCodeAlt />} title="环境配置" subtitle="连接用于简历解析、岗位匹配和投递的 AI 模型。" />
+    {saved === null ? <Card><CardContent className="space-y-3 pt-6">
+      {loadError ? <><p role="alert">无法读取已有配置，请检查本地服务后重试。</p>
+        <Button variant="outline" onClick={load}>重新读取</Button></> : <p role="status">正在读取配置…</p>}
+    </CardContent></Card> :
+      <form className="space-y-5" onSubmit={event => { event.preventDefault(); void save() }}>
+        <fieldset disabled={saving} className="min-w-0 space-y-5">
+          <Card id="ai-model" className="scroll-mt-16">
+            <CardHeader><CardTitle><h2>连接 AI 模型</h2></CardTitle>
+              <CardDescription>填入服务商提供的兼容接口资料。密钥保存在本机数据库中。</CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2"><Label htmlFor="baseUrl">模型地址（Base URL）</Label>
+                <Input id="baseUrl" value={draft.BASE_URL} autoComplete="off" placeholder="https://api.example.com/v1" onChange={e => update('BASE_URL', e.target.value)} />
               </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="model">AI模型</Label>
-                <Input
-                  id="model"
-                  type="text"
-                  value={envConfig.model}
-                  onChange={(e) => setEnvConfig({ ...envConfig, model: e.target.value })}
-                  placeholder="gpt-5-nano-2025-08-07"
-                />
-                <p className="text-xs text-muted-foreground">使用的AI模型名称</p>
+              <div className="space-y-2"><Label htmlFor="model">模型名称</Label>
+                <Input id="model" value={draft.MODEL} autoComplete="off" placeholder="服务商提供的模型 ID" onChange={e => update('MODEL', e.target.value)} />
               </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* API 密钥 */}
-        <Card className="animate-in fade-in slide-in-from-bottom-7 duration-700">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <BiKey className="text-primary" />
-              API 密钥
-            </CardTitle>
-            <CardDescription>配置 API 访问密钥，请妥善保管</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              <Label htmlFor="apiKey">API Key</Label>
-              <div className="relative">
-                <Input
-                  id="apiKey"
-                  type={showApiKey ? 'text' : 'password'}
-                  value={envConfig.apiKey}
-                  onChange={(e) => setEnvConfig({ ...envConfig, apiKey: e.target.value })}
-                  placeholder="sk-xxxxxxxxxxxxxxxxx"
-                />
-                <Button
-                  onClick={() => setShowApiKey(!showApiKey)}
-                  variant="ghost"
-                  size="sm"
-                  className="absolute right-1 top-1/2 -translate-y-1/2 h-7"
-                  type="button"
-                >
-                  {showApiKey ? '隐藏' : '显示'}
-                </Button>
+              <div className="space-y-2 sm:col-span-2"><Label htmlFor="apiKey">API 密钥</Label>
+                <div className="flex gap-2">
+                  <Input id="apiKey" type={showKey ? 'text' : 'password'} autoComplete="off" value={draft.API_KEY} onChange={e => update('API_KEY', e.target.value)} />
+                  <Button type="button" variant="outline" aria-controls="apiKey" aria-pressed={showKey} onClick={() => setShowKey(!showKey)}>{showKey ? '隐藏' : '显示'}</Button>
+                </div>
               </div>
-              <p className="text-xs text-muted-foreground">
-                🔐 API密钥将被安全存储，请妥善保管
-              </p>
+            </CardContent>
+          </Card>
+          <Card><CardContent className="pt-5"><details>
+            <summary className="cursor-pointer font-medium">企业微信通知（可选）</summary>
+            <div className="mt-4 space-y-4">
+              <div className="flex items-center justify-between gap-3"><Label htmlFor="botIsSend">发送企业微信通知</Label>
+                <ToggleSwitch id="botIsSend" label="发送企业微信通知" checked={draft.BOT_IS_SEND === '1'} onToggle={() => update('BOT_IS_SEND', draft.BOT_IS_SEND === '1' ? '0' : '1')} /></div>
+              <Label htmlFor="hookUrl">机器人 Webhook 地址</Label>
+              <Input id="hookUrl" type="password" autoComplete="off" value={draft.HOOK_URL} onChange={e => update('HOOK_URL', e.target.value)} />
             </div>
-          </CardContent>
-        </Card>
-
-        {/* 安全提示 */}
-        <Card className="border-primary/20 bg-primary/5 animate-in fade-in slide-in-from-bottom-8 duration-700">
-          <CardContent className="pt-6">
-            <div className="flex gap-3">
-              <BiInfoCircle className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
-              <div>
-                <p className="text-sm text-foreground">
-                  <strong className="font-semibold">提示：</strong> 这些环境变量将保存到{' '}
-                  <code className="bg-primary/10 px-2 py-0.5 rounded text-primary font-mono text-xs">.env</code>{' '}
-                  文件中。请勿将包含敏感信息的 .env 文件提交到版本控制系统。
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* 操作按钮已移至页头右上角 */}
-
-        {/* 保存结果弹框 —— 与 Boss 配置一致样式 */}
-        {showSaveDialog && saveResult && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" role="dialog" aria-modal="true">
-            <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-2xl w-[92%] max-w-sm border border-gray-200 dark:border-neutral-800 animate-in fade-in zoom-in-95">
-              <Card className="border-0">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-lg flex items-center gap-2">
-                    <BiSave className={saveResult.success ? 'text-green-500' : 'text-red-500'} />
-                    {saveResult.success ? '保存成功' : '保存失败'}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="pt-0">
-                  <p className="text-sm text-muted-foreground mb-4">{saveResult.message}</p>
-                  <div className="flex justify-end gap-2">
-                    <Button
-                      onClick={() => setShowSaveDialog(false)}
-                      className={`rounded-full px-4 ${saveResult.success ? 'bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white' : 'bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 text-white'}`}
-                    >
-                      知道了
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
+          </details></CardContent></Card>
+          <div className="flex flex-wrap items-center gap-3">
+            <Button type="submit" disabled={!dirty || saving}><BiSave /> 保存配置</Button>
+            <span role="status" className="text-sm">{saving ? '正在保存…' : message || (dirty ? '有尚未保存的修改' : '')}</span>
           </div>
-        )}
-      </div>
-    </div>
-  )
+        </fieldset>
+        {!dirty && saved.BASE_URL && saved.API_KEY && saved.MODEL && <Link href="/ai-config" className="inline-block py-2 font-medium text-primary underline underline-offset-4">前往简历与 AI 匹配</Link>}
+      </form>}
+  </div>
 }

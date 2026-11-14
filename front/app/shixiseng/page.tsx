@@ -309,7 +309,7 @@ export default function ZhilianPage() {
                     <div className="space-y-2">
                       <Label>搜索关键词（逗号分隔）</Label>
                       <Input
-                        placeholder="如：行业研究, 投研, 固收, 量化"
+                        placeholder="如：实习生, 数据分析实习"
                         value={config.keywords || ''}
                         onChange={(e) => setConfig((c) => ({ ...c, keywords: e.target.value }))}
                       />
@@ -332,7 +332,7 @@ export default function ZhilianPage() {
                       onIncludeChange={(v) => setConfig((c) => ({ ...c, includeKeywords: v }))}
                       onExcludeChange={(v) => setConfig((c) => ({ ...c, excludeKeywords: v }))}
                       includePlaceholder="实习僧整站均为实习岗，通常留空"
-                      excludePlaceholder="如：法务, 律师, 开发, 算法, 腾讯, 字节"
+                      excludePlaceholder="留空即可保留所有方向"
                     />
                     <div className="flex flex-col gap-3 border-t pt-3 sm:items-center sm:justify-between sm:flex-row">
                       <div className="space-y-1">

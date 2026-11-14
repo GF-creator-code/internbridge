@@ -194,24 +194,21 @@ val buildFrontend = tasks.register("buildFrontend") {
 
         // 依赖没装（或只剩个空目录）时先补上
         if (!File(frontendDir, "node_modules/next").isDirectory) {
-            val corepack = findOnPath("corepack")
-            if (corepack == null) {
-                logger.warn("前端依赖未安装，且 PATH 里没有 corepack，跳过前端构建。" +
-                        "可手动执行: cd front && pnpm install")
-                return@doLast
-            }
-            logger.lifecycle("安装前端依赖（corepack pnpm install）...")
+            val pnpm = findOnPath("pnpm")
+            val installer = pnpm?.let { listOf(it.absolutePath) }
+                ?: findOnPath("corepack")?.let { listOf(it.absolutePath, "pnpm") }
+                ?: throw GradleException("首次构建管理页面需要 pnpm 或 Corepack，请安装后重试。")
+            logger.lifecycle("安装管理页面依赖…")
             // pnpm 会因为"忽略了 sharp/unrs-resolver 的构建脚本"以 1 退出，
             // 这不是真失败，所以不校验退出码，改为下面检查 node_modules 是否到位
             providers.exec {
                 workingDir = frontendDir
-                commandLine(corepack.absolutePath, "pnpm", "install")
+                commandLine(installer + listOf("install", "--frozen-lockfile"))
                 isIgnoreExitValue = true
             }.result.get()
 
             if (!File(frontendDir, "node_modules/next").isDirectory) {
-                logger.warn("前端依赖安装后仍找不到 next，跳过前端构建")
-                return@doLast
+                throw GradleException("前端依赖未能安装，请在 front 目录执行 pnpm install --frozen-lockfile 后重试。")
             }
         }
 

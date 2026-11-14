@@ -1,246 +1,150 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { BiSave, BiBrain, BiInfoCircle } from 'react-icons/bi'
+import Link from 'next/link'
+import { useEffect, useState } from 'react'
+import { BiBrain, BiSave } from 'react-icons/bi'
+import PageHeader from '@/app/components/PageHeader'
+import ToggleSwitch, { toBool } from '@/app/components/ToggleSwitch'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import PageHeader from '@/app/components/PageHeader'
 import { API_BASE } from '@/lib/api'
 import ResumeSkills from './ResumeSkills'
 
+type Profile = { introduce: string; prompt: string }
+const empty: Profile = { introduce: '', prompt: '' }
+
 export default function AiConfigPage() {
-  const [aiConfig, setAiConfig] = useState({
-    introduce: '',
-    prompt: '',
-  })
+  const [draft, setDraft] = useState<Profile>(empty)
+  const [saved, setSaved] = useState<Profile | null>(null)
+  const [loadError, setLoadError] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState(false)
+  const [justSaved, setJustSaved] = useState(false)
+  const [bossEnabled, setBossEnabled] = useState<boolean | null>(null)
+  const [switchBusy, setSwitchBusy] = useState(false)
+  const [switchError, setSwitchError] = useState('')
+  const dirty = saved !== null && (draft.introduce !== saved.introduce || draft.prompt !== saved.prompt)
 
-  const [loading, setLoading] = useState(false)
-  // 是否启用AI（映射 boss_config.enable_ai）
-  const [enableAi, setEnableAi] = useState<number>(0)
+  async function loadProfile() {
+    setLoadError(false)
+    try {
+      const res = await fetch(API_BASE + '/api/ai/config')
+      if (!res.ok) throw new Error()
+      const body = await res.json()
+      if (!body.success || !body.data) throw new Error()
+      const profile = {
+        introduce: body.data.introduce === '请在此填写您的技能介绍' ? '' : body.data.introduce || '',
+        prompt: body.data.prompt === '请在此填写AI提示词模板' ? '' : body.data.prompt || '',
+      }
+      setDraft(profile)
+      setSaved(profile)
+    } catch { setLoadError(true) }
+  }
 
-  // 加载AI配置
+  async function loadSwitch() {
+    setSwitchError('')
+    try {
+      const res = await fetch(API_BASE + '/api/boss/config')
+      if (!res.ok) throw new Error()
+      const data = await res.json()
+      if (!data.config) throw new Error()
+      setBossEnabled(toBool(data.config.enableAi))
+    } catch { setSwitchError('未能读取 BOSS 直聘的开关状态。') }
+  }
+
+  useEffect(() => { void loadProfile(); void loadSwitch() }, [])
   useEffect(() => {
-    fetchAiConfig()
-    fetchEnableAi()
-  }, [])
+    if (!dirty) return
+    const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = true }
+    window.addEventListener('beforeunload', warn)
+    return () => window.removeEventListener('beforeunload', warn)
+  }, [dirty])
 
-  const fetchAiConfig = async () => {
-    try {
-      const response = await fetch(`${API_BASE}/api/ai/config`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      })
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`)
-      }
-
-      const result = await response.json()
-      if (result.success && result.data) {
-        setAiConfig({
-          introduce: result.data.introduce || '',
-          prompt: result.data.prompt || '',
-        })
-      }
-    } catch (error) {
-      console.error('加载AI配置失败:', error)
-      // 如果加载失败，使用默认值，不影响用户使用
-      console.log('使用默认配置')
-    }
+  function edit(profile: Profile) {
+    setDraft(profile)
+    setSaveError(false)
+    setJustSaved(false)
   }
 
-  // 加载 boss_config 的 enable_ai 字段
-  const fetchEnableAi = async () => {
+  async function save(profile: Profile) {
+    if (!saved || saving) return
+    edit(profile)
+    setSaving(true)
     try {
-      const response = await fetch(`${API_BASE}/api/boss/config`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+      const res = await fetch(API_BASE + '/api/ai/config', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(profile),
       })
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`)
-      }
-
-      const result = await response.json()
-      const raw = result?.config?.enableAi
-      const val = String(raw ?? '').trim().toLowerCase()
-      setEnableAi(val === '1' || val === 'true' || val === 'on' ? 1 : Number(raw) === 1 ? 1 : 0)
-    } catch (e) {
-      console.error('加载enable_ai失败:', e)
-    }
+      if (!res.ok || !(await res.json()).success) throw new Error()
+      setSaved(profile)
+      setJustSaved(true)
+    } catch { setSaveError(true) }
+    finally { setSaving(false) }
   }
 
-  // 切换 AI 开关并保存到 boss_config
-  const toggleEnableAi = async () => {
+  async function toggleBoss() {
+    if (bossEnabled === null || switchBusy) return
+    setSwitchBusy(true)
+    setSwitchError('')
     try {
-      const next = enableAi ? 0 : 1
-      setEnableAi(next)
-      const response = await fetch(`${API_BASE}/api/boss/config`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ enableAi: next }),
+      const next = !bossEnabled
+      const res = await fetch(API_BASE + '/api/boss/config', {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enableAi: next ? 1 : 0 }),
       })
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`)
-      }
-      // 可选：校验返回体
-      // const updated = await response.json()
-    } catch (e) {
-      console.error('更新enable_ai失败:', e)
-      // 回滚
-      setEnableAi((prev) => (prev ? 0 : 1))
-      alert('切换失败，请检查后端服务连接')
-    }
+      if (!res.ok) throw new Error()
+      setBossEnabled(next)
+    } catch { setSwitchError('开关保存失败，请重试。') }
+    finally { setSwitchBusy(false) }
   }
 
-  const handleSave = async () => {
-    setLoading(true)
-    try {
-      // 保存AI配置
-      const response = await fetch(`${API_BASE}/api/ai/config`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(aiConfig),
-      })
-
-      const result = await response.json()
-
-      if (result.success) {
-        alert('AI配置已保存！')
-      } else {
-        alert('保存失败: ' + result.message)
-      }
-    } catch (error) {
-      console.error('保存AI配置失败:', error)
-      alert('保存失败，请检查服务器连接！')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  return (
-    <div className="space-y-6">
-      <PageHeader
-        icon={<BiBrain className="text-2xl" />}
-        title="AI配置"
-        subtitle="配置AI相关的技能介绍和提示词"
-        iconClass="text-white"
-        accentBgClass="bg-purple-500"
-        actions={
-          <Button
-            onClick={handleSave}
-            size="sm"
-            className="rounded-full bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 text-white px-4 shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105"
-            type="button"
-            disabled={loading}
-          >
-            <BiSave className="mr-1" /> 保存配置
-          </Button>
-        }
-      />
-
-      <div className="space-y-6">
-        <ResumeSkills profile={aiConfig.introduce} onApply={introduce => setAiConfig(current => ({ ...current, introduce }))} />
-        {/* AI配置 */}
-        <Card className="animate-in fade-in slide-in-from-bottom-5 duration-700">
-          <CardHeader className="flex items-start gap-4">
-            <div className="min-w-0 space-y-2">
-              <CardTitle className="flex items-center gap-2">
-                <BiBrain className="text-primary" />
-                AI配置
-              </CardTitle>
-              <CardDescription>配置AI相关的技能介绍和提示词，用于生成个性化求职内容</CardDescription>
+  return <div className="space-y-5">
+    <PageHeader icon={<BiBrain />} title="简历与 AI 匹配" subtitle="整理可以用于投递的技能，核对香港及内地实习的职位要求。"
+      iconClass="text-white" accentBgClass="bg-purple-600" />
+    <p className="text-sm">首次使用时，先填写模型地址、密钥和名称。{' '}
+      <Link href="/env-config#ai-model" target="_blank" rel="noopener" className="font-medium text-primary underline underline-offset-4">配置 AI 模型（新标签页）</Link>
+    </p>
+    {saved === null ? <Card><CardContent className="space-y-3 pt-6">
+      {loadError ? <><p role="alert">无法读取已保存的技能介绍。请检查本地服务后重试。</p>
+        <Button variant="outline" onClick={loadProfile}>重新读取</Button></> :
+        <p role="status">正在读取已保存的技能介绍…</p>}
+    </CardContent></Card> : <ResumeSkills profile={draft.introduce} saving={saving}
+      onApply={introduce => edit({ ...draft, introduce })}
+      onSave={introduce => save({ ...draft, introduce })}>
+      <Card>
+        <CardHeader><CardTitle><h2>投递用技能介绍</h2></CardTitle>
+          <CardDescription>启用 AI 的 BOSS 直聘、JobsDB 和 OfferToday 会在下次任务中读取已保存的介绍。</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2"><Label htmlFor="introduce">技能介绍</Label>
+            <Textarea id="introduce" value={draft.introduce} disabled={saving} className="min-h-32"
+              onChange={event => edit({ ...draft, introduce: event.target.value })}
+              placeholder="写下你做过的事，例如用 Excel 整理调查数据，或用 SQL 分析订单。" />
+          </div>
+          <details className="border-y py-3">
+            <summary className="cursor-pointer text-sm font-medium">编辑投递提示词</summary>
+            <div className="mt-3 space-y-2"><Label htmlFor="prompt">AI 提示词</Label>
+              <Textarea id="prompt" value={draft.prompt} disabled={saving} className="min-h-24"
+                onChange={event => edit({ ...draft, prompt: event.target.value })} />
+              <p className="text-sm text-muted-foreground">留空使用平台默认提示词。模板中的五个 %s 依次引用技能介绍、目标方向、岗位名称、职位描述和参考问候。</p>
             </div>
-            <div>
-              <button
-                type="button"
-                aria-label="AI启用开关"
-                onClick={toggleEnableAi}
-                className={`relative inline-flex h-7 w-14 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-emerald-400/40 border border-white/30 shadow-[inset_0_1px_0_rgba(255,255,255,.25)] ${enableAi ? 'bg-emerald-500/80 hover:bg-emerald-500' : 'bg-white/10 hover:bg-white/15'}`}
-              >
-                <span
-                  className={`absolute top-1 left-1 h-5 w-5 rounded-full bg-white shadow transition-transform ${enableAi ? 'translate-x-7' : 'translate-x-0'}`}
-                />
-              </button>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-6">
-              <div className="space-y-2">
-                <Label htmlFor="introduce">技能介绍</Label>
-                <Textarea
-                  id="introduce"
-                  value={aiConfig.introduce}
-                  onChange={(e) => setAiConfig({ ...aiConfig, introduce: e.target.value })}
-                  placeholder="请输入您的技能介绍，例如：我熟练使用Java、Python等语言进行开发..."
-                  className="min-h-[150px] resize-y"
-                />
-                <p className="text-xs text-muted-foreground">
-                  详细描述您的技能、经验和专业背景，AI将使用这些信息生成个性化的求职文本
-                </p>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="prompt">AI提示词</Label>
-                <Textarea
-                  id="prompt"
-                  value={aiConfig.prompt}
-                  onChange={(e) => setAiConfig({ ...aiConfig, prompt: e.target.value })}
-                  placeholder="请输入AI提示词模板，例如：我目前在找工作，%s，我期望的岗位方向是【%s】..."
-                  className="min-h-[150px] resize-y"
-                />
-                <p className="text-xs text-muted-foreground">
-                  AI使用的提示词模板，支持使用 %s 作为占位符，用于动态插入内容
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* ��用说明 */}
-        <Card className="border-primary/20 bg-primary/5 animate-in fade-in slide-in-from-bottom-6 duration-700">
-          <CardContent className="pt-6">
-            <div className="flex gap-3">
-              <BiInfoCircle className="h-5 w-5 text-primary flex-shrink-0 mt-0.5" />
-              <div>
-                <p className="text-sm text-foreground mb-2">
-                  <strong className="font-semibold">使用说明：</strong>
-                </p>
-                <ul className="text-sm text-muted-foreground space-y-2">
-                  <li className="flex items-start gap-2">
-                    <span className="text-primary mt-0.5">•</span>
-                    <span><strong>技能介绍：</strong>用于AI了解您的专业技能、工作经验和技术背景，是生成个性化内容的基础</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="text-primary mt-0.5">•</span>
-                    <span><strong>AI提示词：</strong>定义AI生成内容的模板和风格，支持使用 <code className="bg-muted px-1 py-0.5 rounded text-xs">%s</code> 作为占位符</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="text-primary mt-0.5">•</span>
-                    <span><strong>效果：</strong>配置保存后，AI将在自动投递时使用这些信息生成匹配度高的求职沟通内容</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <span className="text-primary mt-0.5">•</span>
-                    <span><strong>提示：</strong>建议定期更新技能介绍以反映最新的技能和经验，提高匹配成功率</span>
-                  </li>
-                </ul>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* 操作按钮（已迁移到右上角 PageHeader.actions，保持与环境配置一致） */}
+          </details>
+          <div className="flex flex-wrap items-center gap-3">
+            <Button type="button" disabled={!dirty || saving} onClick={() => save(draft)}><BiSave /> 保存修改</Button>
+            <span role="status" className="text-sm">{saving ? '正在保存…' : saveError ? '保存失败，修改仍在本页，可再次保存。' :
+              dirty ? '有尚未保存的修改' : justSaved ? '已保存，下次投递任务将使用这份介绍。' : saved.introduce.trim() ? '已读取保存的介绍' : '尚未填写技能介绍'}</span>
+          </div>
+        </CardContent>
+      </Card>
+    </ResumeSkills>}
+    <Card><CardContent className="space-y-2 pt-6">
+      <div className="flex items-center justify-between gap-4">
+        <Label htmlFor="boss-ai">BOSS 直聘投递时使用 AI</Label>
+        <ToggleSwitch id="boss-ai" label="BOSS 直聘投递时使用 AI" checked={bossEnabled === true}
+          disabled={bossEnabled === null || switchBusy} onToggle={toggleBoss} />
       </div>
-    </div>
-  )
+      <p className="text-sm text-muted-foreground">简历解析与手动匹配可独立使用。两个香港平台的投递开关位于各自的配置页。</p>
+      {switchError && <div role="alert" className="text-sm">{switchError} {bossEnabled === null && <button type="button" className="underline" onClick={loadSwitch}>重试</button>}</div>}
+    </CardContent></Card>
+  </div>
 }

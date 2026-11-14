@@ -1734,7 +1734,7 @@ public class Boss {
         String introduce = (aiConfig != null && aiConfig.getIntroduce() != null) ? aiConfig.getIntroduce() : "";
         String prompt = (aiConfig != null) ? aiConfig.getPrompt() : null;
 
-        String requestMessage = (prompt != null)
+        String requestMessage = (prompt != null && !prompt.isBlank() && !prompt.equals("请在此填写AI提示词模板"))
                 ? String.format(prompt, introduce, keyword, jobName, jd, config.getSayHi())
                 : buildDefaultPrompt(introduce, keyword, jobName, jd);
 

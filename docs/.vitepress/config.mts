@@ -3,10 +3,10 @@ import { defineConfig } from 'vitepress'
 export default defineConfig({
   lang: 'zh-CN',
   title: 'Get Jobs - AI 找工作助手',
-  description: '全平台自动投简历脚本，支持 Boss直聘、猎聘、智联、前程无忧、拉勾，内置 AI 岗位匹配与打招呼语生成。',
+  description: '面向香港和内地实习申请的本机管理端。提取简历技能、核对职位要求并查看平台岗位记录。',
   
   // GitHub Pages 使用仓库路径，本地开发使用根路径。
-  base: process.env.DOCS_BASE || (process.env.GITHUB_ACTIONS ? '/get_jobs/' : '/'),
+  base: process.env.DOCS_BASE || (process.env.GITHUB_ACTIONS ? '/' + (process.env.GITHUB_REPOSITORY?.split('/')[1] || 'internbridge') + '/' : '/'),
   lastUpdated: true,
 
   vite: {
@@ -65,8 +65,8 @@ export default defineConfig({
       {
         text: '相关资源',
         items: [
-          { text: 'GitHub 仓库', link: 'https://github.com/loks666/get_jobs' },
-          { text: 'Gitee 镜像', link: 'https://gitee.com/lok666/get_jobs' },
+          { text: 'GitHub 仓库', link: 'https://github.com/GF-creator-code/internbridge' },
+          { text: '上游 Gitee 镜像', link: 'https://gitee.com/lok666/get_jobs' },
           { text: '界面截图', link: '/guide/screenshots' },
           { text: '社区与贡献', link: '/guide/community' },
           { text: '其他开源项目', link: '/guide/resources' },
@@ -105,7 +105,7 @@ export default defineConfig({
 
     // 编辑与更新配置
     editLink: {
-      pattern: 'https://github.com/loks666/get_jobs/edit/main/docs/:path',
+      pattern: 'https://github.com/GF-creator-code/internbridge/edit/main/docs/:path',
       text: '在 GitHub 上编辑此页'
     },
     lastUpdated: {
@@ -118,7 +118,7 @@ export default defineConfig({
 
     // 社交链接
     socialLinks: [
-      { icon: 'github', link: 'https://github.com/loks666/get_jobs' }
+      { icon: 'github', link: 'https://github.com/GF-creator-code/internbridge' }
     ],
 
     // 页脚配置

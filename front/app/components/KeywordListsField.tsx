@@ -1,5 +1,6 @@
 'use client'
 
+import { useId } from 'react'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 
@@ -7,7 +8,13 @@ import { Label } from '@/components/ui/label'
 export function parseKeywordList(raw?: string | string[] | null): string {
   if (!raw) return ''
   if (Array.isArray(raw)) return raw.filter(Boolean).join(', ')
-  const t = raw.trim()
+  let t = raw.trim()
+  if (t.startsWith('"')) {
+    try {
+      const decoded = JSON.parse(t)
+      if (typeof decoded === 'string' && decoded.trim().startsWith('[')) t = decoded.trim()
+    } catch { /* Keep legacy comma-separated text. */ }
+  }
   if (t.startsWith('[') && t.endsWith(']')) {
     try {
       const arr = JSON.parse(t)
@@ -50,11 +57,13 @@ export default function KeywordListsField({
   includePlaceholder,
   excludePlaceholder,
 }: KeywordListsFieldProps) {
+  const id = useId()
   return (
     <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
       <div className="space-y-2">
-        <Label>标题必含关键词（逗号分隔，留空不限制）</Label>
+        <Label htmlFor={id + "-include"}>标题必含关键词（逗号分隔，留空不限制）</Label>
         <Input
+          id={id + "-include"}
           placeholder={includePlaceholder ?? '如：实习, 實習, internship'}
           value={includeValue}
           onChange={(e) => onIncludeChange(e.target.value)}
@@ -62,9 +71,10 @@ export default function KeywordListsField({
         <p className="text-xs text-muted-foreground">岗位标题必须包含其中任意一个词才会投递。</p>
       </div>
       <div className="space-y-2">
-        <Label>排除关键词（逗号分隔）</Label>
+        <Label htmlFor={id + "-exclude"}>排除关键词（逗号分隔）</Label>
         <Input
-          placeholder={excludePlaceholder ?? '如：法务, 律师, 腾讯, 字节'}
+          id={id + "-exclude"}
+          placeholder={excludePlaceholder ?? '留空即可保留所有方向'}
           value={excludeValue}
           onChange={(e) => onExcludeChange(e.target.value)}
         />

@@ -30,9 +30,13 @@ class AnalysisPagesTest(unittest.TestCase):
                         page.goto(self.base + path, wait_until="domcontentloaded")
                         if not direct:
                             page.get_by_role("tab", name="投递分析").click()
-                        # These canvases appear only after the real stats response is rendered.
-                        expect(page.locator("canvas").first).to_be_visible(timeout=8000)
-                        expect(page.get_by_text("岗位列表", exact=True)).to_be_visible()
+                        # A fresh database also has a valid, useful analysis page.
+                        title = page.get_by_role("heading", name="岗位列表")
+                        expect(title).to_be_visible(timeout=8000)
+                        expect(page.get_by_text("总岗位数", exact=True)).to_be_visible(timeout=8000)
+                        expect(page.locator("main").get_by_role("alert")).to_have_count(0)
+                        expect(page.get_by_role("region", name="岗位列表，可横向滚动").or_(
+                            page.get_by_text("尚无岗位记录。", exact=False))).to_be_visible(timeout=8000)
                         self.assertEqual(errors, [])
                     finally:
                         page.close()

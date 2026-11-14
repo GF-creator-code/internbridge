@@ -4,8 +4,8 @@ layout: home
 
 hero:
   name: "Get Jobs · Multi-Platform"
-  text: "七平台统一的全自动求职投递"
-  tagline: "把时间留给面试准备 · 平台级并发投递<br>通用关键词过滤 · AI 智能定制招呼语 · 精准企业黑名单"
+  text: "香港与内地实习申请管理"
+  tagline: "整理简历技能，核对职位要求，查看各平台的岗位和投递记录。"
   actions:
     - theme: brand
       text: 🚀 快速上手
@@ -23,10 +23,10 @@ features:
     details: 每平台独立 Playwright 实例 + 持久化浏览器 profile + 独立执行线程，多平台同时投递互不阻塞，Cookie 自动注入回写。
   - icon: 🧩
     title: 通用关键词过滤
-    details: 标题必含 / 排除关键词双列表机制，全平台共用一套代码，规则作为配置数据存在配置页，改规则不改代码。
+    details: 标题必含 / 排除关键词双列表机制，实习僧、JobsDB 和 OfferToday 共用，规则作为配置数据存在配置页，改规则不改代码。
   - icon: 🤖
     title: AI 智能打招呼
-    details: 接入兼容 OpenAI 格式的大模型，基于个人简历与岗位 JD 动态撰写招呼语 / Cover Letter，可按平台开关。
+    details: 用配置的模型提取简历原文依据，对照职位描述，保存技能介绍供平台投递使用。
   - icon: 🛡️
     title: 多层过滤闸
     details: 黑名单（公司/职位/招聘者）、HR 活跃度、公司规模、实习岗限定、单关键词投递上限，层层把关。
@@ -47,28 +47,18 @@ features:
 本仓库为 [loks666/get_jobs](https://github.com/loks666/get_jobs) 的增强 fork，协议（PolyForm Noncommercial）继承上游：非商业使用免费，AI 接口费用由所选服务商收取。各招聘平台页面结构会随时间变化，选择器失效请按平台自行修正。
 :::
 
-## ⚡ 三步极简启动
+## 启动与第一次使用
 
-```bash
-# 1. 克隆项目仓库
+Windows 在安装 JDK 21、Node.js 和 Corepack 或 pnpm 后，可从 PowerShell 启动。
+
+```powershell
 git clone https://github.com/GF-creator-code/internbridge.git
-cd get_jobs
-
-# 2. 放置空数据库文件（从上游 Release 下载 getjobs.db.template 重命名为 getjobs.db）
-mkdir -p db
-# 将下载的 getjobs.db 放入 db/ 目录
-
-# 3. 构建前端并启动（Windows）
-cd front && npm install && npm run build:prod && cd ..
-powershell -File start-local.ps1
+cd internbridge
+powershell -File .\start-local.ps1
 ```
 
-::: tip 💡 提示
-启动后访问 <http://127.0.0.1:9527>，在各平台配置页填关键词与投递行为、完成登录，即可开启全自动投递。详细步骤请查看 [快速上手教程](/guide/quick-start)。
-:::
-
----
+进入 [本机管理端](http://127.0.0.1:9527/) 选择香港或内地平台。JobsDB 默认只采集，点岗位名称即可前往原站。要用简历试配一份职位描述，请先在「环境配置」连接模型。[完整安装与使用步骤](/guide/quick-start)
 
 ## 📑 文档说明
 
-`docs/` 目录沿自上游项目，配置与部署流程通用；本 fork 的功能差异（多平台、并发、关键词过滤、香港站）以仓库根目录 [README](../README.md) 为准。
+`docs/` 目录沿自上游项目，配置与部署流程通用；本 fork 的功能差异（多平台、并发、关键词过滤、香港站）以仓库根目录 [README](https://github.com/GF-creator-code/internbridge#readme) 为准。

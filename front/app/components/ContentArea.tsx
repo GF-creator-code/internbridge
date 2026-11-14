@@ -15,12 +15,12 @@ export default function ContentArea({ children }: { children: ReactNode }) {
       case '/51job':
         return 'accent-amber'
       case '/shixiseng':
-      return 'accent-emerald'
+        return 'accent-emerald'
       case '/offertoday':
-      return 'accent-indigo'
+        return 'accent-indigo'
       case '/jobsdb':
-      return 'accent-violet'
-    case '/zhilian':
+        return 'accent-violet'
+      case '/zhilian':
         return 'accent-sky'
       case '/global-config':
         return 'accent-rose'
@@ -30,14 +30,14 @@ export default function ContentArea({ children }: { children: ReactNode }) {
   }, [pathname])
 
   return (
-    <main className={`flex-1 ml-64 bg-background dark:bg-blacksection content-bg ${accentClass} min-h-screen`}>
+    <main id="main-content" tabIndex={-1} className={`min-w-0 flex-1 pt-14 lg:ml-64 lg:pt-0 bg-background dark:bg-blacksection content-bg ${accentClass} min-h-screen`}>
       <motion.div
         key={pathname}
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         exit={{ opacity: 0, y: -20 }}
         transition={{ duration: 0.4, ease: "easeInOut" }}
-        className="container py-8"
+        className="mx-auto w-full max-w-[1400px] px-3 py-4 sm:px-6 lg:px-8 lg:py-8"
       >
         {children}
       </motion.div>

@@ -335,8 +335,8 @@ public class AiService {
     @Transactional
     protected AiEntity createDefaultConfig() {
         AiEntity aiEntity = new AiEntity();
-        aiEntity.setIntroduce("请在此填写您的技能介绍");
-        aiEntity.setPrompt("请在此填写AI提示词模板");
+        aiEntity.setIntroduce("");
+        aiEntity.setPrompt(null);
         aiEntity.setCreatedAt(java.time.LocalDateTime.now());
         aiEntity.setUpdatedAt(java.time.LocalDateTime.now());
         aiMapper.insert(aiEntity);

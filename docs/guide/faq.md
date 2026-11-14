@@ -7,11 +7,7 @@
 ## 一、环境与启动报错
 
 ### Q1: 启动时报错 `SQLite` 找不到表格或找不到数据库？
-- **原因**：由于安全合规原因，源码中不带预生成的数据库文件。
-- **解决方案**：
-  1. 请到 [GitHub Release 页面](https://github.com/loks666/get_jobs/releases/latest) 下载 `getjobs.db.template`。
-  2. 将其重命名为 `getjobs.db`。
-  3. 放置到项目根目录下的 `db/` 文件夹中（即 `get_jobs/db/getjobs.db`）。
+Windows 启动脚本会自动准备数据库。若下载失败，可手动将上游的 `getjobs.db.template` 保存到项目根目录的 `db/getjobs.db`。更新时请保留自己的数据库，其中有已保存的技能、配置和记录。[数据库模板](https://github.com/loks666/get_jobs/releases/tag/v2.0.1) · [安装及更新步骤](/guide/quick-start)
 
 ---
 
