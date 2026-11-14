@@ -39,6 +39,7 @@ dependencies {
     implementation("com.microsoft.playwright:playwright:1.62.0")
     implementation("com.baomidou:mybatis-plus-spring-boot3-starter:3.5.9")
     implementation("org.xerial:sqlite-jdbc:3.45.1.0")
+    implementation("org.apache.pdfbox:pdfbox:3.0.8")
     // 代码生成器（MyBatis-Plus Generator + Freemarker 模板）
     implementation("com.baomidou:mybatis-plus-generator:3.5.9")
     implementation("org.freemarker:freemarker:2.3.32")

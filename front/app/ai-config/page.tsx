@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import PageHeader from '@/app/components/PageHeader'
 import { API_BASE } from '@/lib/api'
+import ResumeSkills from './ResumeSkills'
 
 export default function AiConfigPage() {
   const [aiConfig, setAiConfig] = useState({
@@ -149,6 +150,7 @@ export default function AiConfigPage() {
       />
 
       <div className="space-y-6">
+        <ResumeSkills profile={aiConfig.introduce} onApply={introduce => setAiConfig(current => ({ ...current, introduce }))} />
         {/* AI配置 */}
         <Card className="animate-in fade-in slide-in-from-bottom-5 duration-700">
           <CardHeader className="flex items-start gap-4">

@@ -91,6 +91,7 @@ public class AiService {
         }
 
         HttpRequest request = builder
+                .timeout(Duration.ofSeconds(timeoutInSeconds))
                 .POST(HttpRequest.BodyPublishers.ofString(requestData.toString()))
                 .build();
 
@@ -105,19 +106,7 @@ public class AiService {
 
                 String responseContent;
                 if (endpoint.endsWith("/responses")) {
-                    // Responses API：优先读取 output_text
-                    responseContent = responseObject.optString("output_text", null);
-                    if (responseContent == null || responseContent.isEmpty()) {
-                        // 兜底：尝试从通用 choices/message 结构读取（部分代理/兼容层会返回该结构）
-                        try {
-                            JSONObject messageObject = responseObject.getJSONArray("choices")
-                                    .getJSONObject(0)
-                                    .getJSONObject("message");
-                            responseContent = messageObject.getString("content");
-                        } catch (Exception ignore) {
-                            responseContent = response.body(); // 最后兜底：返回原始文本，避免空值
-                        }
-                    }
+                    responseContent = responsesText(responseObject);
                 } else {
                     // Chat Completions API
                     JSONObject messageObject = responseObject.getJSONArray("choices")
@@ -142,19 +131,43 @@ public class AiService {
                 return responseContent;
             } else {
                 // 更详细的错误日志，便于定位 400 问题
-                log.error("AI请求失败: status={}, endpoint={}, body={}", response.statusCode(), endpoint, response.body());
+                log.error("AI请求失败: status={}, endpoint={}", response.statusCode(), endpoint);
                 // 针对 Responses-only 模型误用 Chat Completions 的常见错误做一次自动重试
                 if (!endpoint.endsWith("/responses") && containsReasoningParamError(response.body())) {
                     String fallbackEndpoint = buildResponsesEndpoint(baseUrl);
                     log.warn("检测到 reasoning 相关参数错误，自动切换到 Responses API 重试: {}", fallbackEndpoint);
                     return sendRequestViaResponses(content, apiKey, model, fallbackEndpoint);
                 }
-                throw new RuntimeException("AI请求失败，状态码: " + response.statusCode() + ", 详情: " + response.body());
+                throw new RuntimeException("AI请求失败，状态码: " + response.statusCode());
             }
         } catch (Exception e) {
             log.error("调用AI服务异常", e);
             throw e instanceof RuntimeException ? (RuntimeException) e : new RuntimeException(e);
         }
+    }
+
+    private String responsesText(JSONObject response) {
+        String text = response.optString("output_text", "");
+        if (!text.isBlank()) return text;
+        var parts = new StringBuilder();
+        var output = response.optJSONArray("output");
+        if (output != null) {
+            for (Object value : output) {
+                if (!(value instanceof JSONObject message) || !"message".equals(message.optString("type"))) continue;
+                var content = message.optJSONArray("content");
+                if (content == null) continue;
+                for (Object part : content) {
+                    if (part instanceof JSONObject item && "output_text".equals(item.optString("type")))
+                        parts.append(item.optString("text", ""));
+                }
+            }
+        }
+        if (!parts.isEmpty()) return parts.toString();
+        // Some compatible providers use the chat-completions envelope on this endpoint.
+        var choices = response.optJSONArray("choices");
+        if (choices != null && !choices.isEmpty())
+            return choices.getJSONObject(0).getJSONObject("message").getString("content");
+        throw new IllegalStateException("AI 响应中没有可读取的文本。");
     }
 
     private String normalizeBaseUrl(String baseUrl) {
@@ -227,6 +240,7 @@ public class AiService {
                 .header("Accept", "application/json")
                 .header("Authorization", "Bearer " + apiKey)
                 .header("api-key", apiKey)
+                .timeout(Duration.ofSeconds(timeoutInSeconds))
                 .POST(HttpRequest.BodyPublishers.ofString(requestData.toString()))
                 .build();
 
@@ -234,23 +248,10 @@ public class AiService {
             HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
             if (response.statusCode() == 200) {
                 JSONObject resp = new JSONObject(response.body());
-                String outputText = resp.optString("output_text", null);
-                if (outputText != null && !outputText.isEmpty()) {
-                    return outputText;
-                }
-                // 兜底解析：部分兼容层可能返回 choices/message 结构
-                try {
-                    JSONObject messageObject = resp.getJSONArray("choices")
-                            .getJSONObject(0)
-                            .getJSONObject("message");
-                    return messageObject.getString("content");
-                } catch (Exception ignore) {
-                }
-                // 无法解析则直接返回原始体，避免空值中断流程
-                return response.body();
+                return responsesText(resp);
             }
-            log.error("Responses API 调用失败: status={}, endpoint={}, body={}", response.statusCode(), endpoint, response.body());
-            throw new RuntimeException("AI请求失败，状态码: " + response.statusCode() + ", 详情: " + response.body());
+            log.error("Responses API 调用失败: status={}, endpoint={}", response.statusCode(), endpoint);
+            throw new RuntimeException("AI请求失败，状态码: " + response.statusCode());
         } catch (Exception e) {
             log.error("Responses API 调用异常", e);
             throw e instanceof RuntimeException ? (RuntimeException) e : new RuntimeException(e);

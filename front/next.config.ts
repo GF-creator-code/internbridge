@@ -7,6 +7,7 @@ const nextConfig: NextConfig = {
   // 将API配置暴露给客户端
   env: {
     API_BASE_URL: serverConfig.api.baseUrl,
+    FRONTEND_PORT: String(serverConfig.port),
     APP_NAME: serverConfig.app.name,
     APP_VERSION: serverConfig.app.version,
   },
