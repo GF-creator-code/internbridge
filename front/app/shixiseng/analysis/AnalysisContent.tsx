@@ -26,8 +26,6 @@ type StatsResponse = {
     byStatus: NameValue[]
     byCity: NameValue[]
     byCompany: NameValue[]
-    byExperience: NameValue[]
-    byDegree: NameValue[]
     salaryBuckets: BucketValue[]
     dailyTrend?: NameValue[]
   }
@@ -224,6 +222,7 @@ function badgeClass(type: "status" | "delivery", text?: string) {
 export default function AnalysisContent({ showHeader = false }: { showHeader?: boolean }) {
   const [stats, setStats] = useState<StatsResponse | null>(null)
   const [loadingStats, setLoadingStats] = useState(true)
+  const [statsFailed, setStatsFailed] = useState(false)
 
   const [items, setItems] = useState<ShixisengJob[]>([])
   const [total, setTotal] = useState(0)
@@ -281,10 +280,13 @@ export default function AnalysisContent({ showHeader = false }: { showHeader?: b
       if (maxK) params.set("maxK", String(Number(maxK)))
       if (keyword) params.set("keyword", keyword)
       const res = await fetch(`${API_BASE}/api/shixiseng/stats?${params.toString()}`)
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
       const data: StatsResponse = await res.json()
+      setStatsFailed(false)
       setStats(data)
     } catch (e) {
-      console.error("fetch zhilian stats failed", e)
+      setStatsFailed(true)
+      console.error("fetch shixiseng stats failed", e)
     } finally {
       setLoadingStats(false)
     }
@@ -472,7 +474,7 @@ export default function AnalysisContent({ showHeader = false }: { showHeader?: b
   return (
     <div className="space-y-8">
       {showHeader && (
-        <PageHeader title="实习僧 投递分析" subtitle="基于 zhilian_data 表的统计图与列表分析" icon={<BiBarChart size={28} />} />
+        <PageHeader title="实习僧 投递分析" subtitle="实习僧岗位的统计图与投递记录" icon={<BiBarChart size={28} />} />
       )}
 
       {/* KPI 卡片 */}
@@ -551,6 +553,7 @@ export default function AnalysisContent({ showHeader = false }: { showHeader?: b
         </CardContent>
       </Card>
 
+      {statsFailed && <p role="alert" className="text-sm text-red-600">统计加载失败，请点击「刷新统计」重试。</p>}
       {/* 图表区 */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Card>
@@ -562,7 +565,7 @@ export default function AnalysisContent({ showHeader = false }: { showHeader?: b
             {stats ? (
               <ChartCanvas type="pie" labels={stats.charts.byStatus.map((x) => x.name)} data={stats.charts.byStatus.map((x) => x.value)} colors={CATEGORY_COLORS} />
             ) : (
-              <div className="text-muted-foreground">加载中...</div>
+              <div className="text-muted-foreground">{statsFailed ? "暂无统计" : "加载中..."}</div>
             )}
           </CardContent>
         </Card>
@@ -576,7 +579,7 @@ export default function AnalysisContent({ showHeader = false }: { showHeader?: b
             {stats ? (
               <ChartCanvas type="bar" labels={stats.charts.byCity.map((x) => x.name)} data={stats.charts.byCity.map((x) => x.value)} color="#3b82f6" />
             ) : (
-              <div className="text-muted-foreground">加载中...</div>
+              <div className="text-muted-foreground">{statsFailed ? "暂无统计" : "加载中..."}</div>
             )}
           </CardContent>
         </Card>
@@ -590,35 +593,7 @@ export default function AnalysisContent({ showHeader = false }: { showHeader?: b
             {stats ? (
               <ChartCanvas type="bar" labels={stats.charts.byCompany.map((x) => x.name)} data={stats.charts.byCompany.map((x) => x.value)} color="#10b981" />
             ) : (
-              <div className="text-muted-foreground">加载中...</div>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2"><BiBarChart /> 经验分布</CardTitle>
-            <CardDescription>不同经验要求的岗位数</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {stats ? (
-              <ChartCanvas type="bar" labels={stats.charts.byExperience.map((x) => x.name)} data={stats.charts.byExperience.map((x) => x.value)} color="#f59e0b" />
-            ) : (
-              <div className="text-muted-foreground">加载中...</div>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2"><BiBarChart /> 学历分布</CardTitle>
-            <CardDescription>不同学历要求的岗位数</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {stats ? (
-              <ChartCanvas type="bar" labels={stats.charts.byDegree.map((x) => x.name)} data={stats.charts.byDegree.map((x) => x.value)} color="#6366f1" />
-            ) : (
-              <div className="text-muted-foreground">加载中...</div>
+              <div className="text-muted-foreground">{statsFailed ? "暂无统计" : "加载中..."}</div>
             )}
           </CardContent>
         </Card>
@@ -632,7 +607,7 @@ export default function AnalysisContent({ showHeader = false }: { showHeader?: b
             {stats ? (
               <ChartCanvas type="line" labels={(computedSalaryBuckets.length ? computedSalaryBuckets : stats.charts.salaryBuckets).map((x) => (x as any).bucket)} data={(computedSalaryBuckets.length ? computedSalaryBuckets : stats.charts.salaryBuckets).map((x) => x.value)} color="#ef4444" />
             ) : (
-              <div className="text-muted-foreground">加载中...</div>
+              <div className="text-muted-foreground">{statsFailed ? "暂无统计" : "加载中..."}</div>
             )}
           </CardContent>
         </Card>
