@@ -5,6 +5,7 @@ import com.getjobs.application.service.CookieService;
 import com.getjobs.worker.dto.JobProgressMessage;
 import com.getjobs.worker.job51.Job51;
 import com.getjobs.worker.job51.Job51Config;
+import com.getjobs.worker.manager.PlatformTaskBrowser;
 import com.getjobs.worker.manager.PlaywrightManager;
 import com.microsoft.playwright.Page;
 import lombok.RequiredArgsConstructor;
@@ -27,6 +28,7 @@ public class Job51JobService implements JobPlatformService {
     private static final String PLATFORM = "51job";
 
     private final PlaywrightManager playwrightManager;
+    private final PlatformTaskBrowser platformTaskBrowser;
     private final ObjectProvider<Job51> job51Provider;
     private final ConfigService configService;
     private final CookieService cookieService;
@@ -95,8 +97,13 @@ public class Job51JobService implements JobPlatformService {
             job51.setShouldStopCallback(this::shouldStop);
             job51.prepare();
 
-            // 必须跑在 Playwright 专用线程上，否则会和后台登录监控并发操作同一条连接
-            int deliveredCount = playwrightManager.callOnPlaywright(job51::execute);
+            // 与 Boss/Liepin 一致：投递走平台任务浏览器，把任务页注入 worker。
+            // 旧写法 callOnPlaywright(job51::execute) 从未给 worker 设置页面，
+            // 导致任务 0 秒返回、投递 0 个简历。
+            int deliveredCount = platformTaskBrowser.run(PLATFORM, taskPage -> {
+                job51.setPage(taskPage);
+                return job51.execute();
+            });
 
             progressCallback.accept(JobProgressMessage.success(PLATFORM,
                 String.format("投递任务完成，共投递%d个职位", deliveredCount)));

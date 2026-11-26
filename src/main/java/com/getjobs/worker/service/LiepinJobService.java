@@ -5,6 +5,7 @@ import com.getjobs.application.service.CookieService;
 import com.getjobs.worker.dto.JobProgressMessage;
 import com.getjobs.worker.liepin.Liepin;
 import com.getjobs.worker.liepin.LiepinConfig;
+import com.getjobs.worker.manager.PlatformTaskBrowser;
 import com.getjobs.worker.manager.PlaywrightManager;
 import com.microsoft.playwright.Page;
 import lombok.RequiredArgsConstructor;
@@ -30,6 +31,7 @@ public class LiepinJobService implements JobPlatformService {
     private static final String PLATFORM = "liepin";
 
     private final PlaywrightManager playwrightManager;
+    private final PlatformTaskBrowser platformTaskBrowser;
     private final ConfigService configService;
     private final CookieService cookieService;
     private final ObjectProvider<Liepin> liepinProvider;
@@ -90,8 +92,13 @@ public class LiepinJobService implements JobPlatformService {
             liepin.setProgressCallback(cb);
             liepin.setShouldStopCallback(this::shouldStop);
 
-            // 必须跑在 Playwright 专用线程上，否则会和后台登录监控并发操作同一条连接
-            int deliveredCount = playwrightManager.callOnPlaywright(liepin::execute);
+            // 与 Boss 一致：投递走平台任务浏览器，把任务页注入 worker。
+            // 旧写法 callOnPlaywright(liepin::execute) 从未给 worker 设置页面，
+            // 导致 "Liepin.page 未设置" 直接失败。
+            int deliveredCount = platformTaskBrowser.run(PLATFORM, taskPage -> {
+                liepin.setPage(taskPage);
+                return liepin.execute();
+            });
 
             progressCallback.accept(JobProgressMessage.success(PLATFORM,
                 String.format("投递任务完成，共发起%d个聊天", deliveredCount)));
