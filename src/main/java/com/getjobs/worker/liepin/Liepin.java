@@ -123,7 +123,13 @@ public class Liepin {
                 info("收到停止指令，提前结束关键词循环");
                 break;
             }
-            submit(keyword);
+            // 单个关键词搜索页加载失败（超时/风控页）只跳过该词，
+            // 不再中断整轮投递（对齐 zhilian 的容错行为）
+            try {
+                submit(keyword);
+            } catch (Exception e) {
+                log.warn("关键词【" + keyword + "】处理失败，跳过: {}", e.getMessage());
+            }
         }
         return resultList.size();
     }
@@ -218,12 +224,13 @@ public class Liepin {
         return shouldStopCallback != null && Boolean.TRUE.equals(shouldStopCallback.get());
     }
 
-    /** 法律类岗位判定：命中任一关键词即跳过 */
+    /** 法律类 / 招聘猎头类岗位判定：命中任一关键词即跳过 */
     private boolean isLegalJob(String text) {
         if (text == null || text.isBlank()) {
             return false;
         }
-        String[] terms = {"法务", "法律", "律师", "律所", "非诉", "诉讼", "仲裁", "知识产权", "专利"};
+        String[] terms = {"法务", "法律", "律师", "律所", "非诉", "诉讼", "仲裁", "知识产权", "专利",
+                "招聘", "猎头", "獵頭"};
         for (String t : terms) {
             if (text.contains(t)) {
                 return true;
@@ -246,8 +253,8 @@ public class Liepin {
         lastApiEntities.clear();
         page.navigate(getSearchUrl() + "&key=" + cleanKeyword);
         
-        // 等待分页元素加载
-        page.waitForSelector(PAGINATION_BOX, new Page.WaitForSelectorOptions().setTimeout(10000));
+        // 等待分页元素加载（搜索页偶发加载慢，放宽到 30 秒）
+        page.waitForSelector(PAGINATION_BOX, new Page.WaitForSelectorOptions().setTimeout(30000));
         Locator paginationBox = page.locator(PAGINATION_BOX);
         Locator lis = paginationBox.locator("li");
         setMaxPage(lis);

@@ -1,6 +1,7 @@
 package com.getjobs.worker.job51;
 
 import com.getjobs.application.service.Job51Service;
+import com.getjobs.worker.utils.JobExcludeRules;
 import com.getjobs.worker.utils.JobUtils;
 import com.getjobs.worker.utils.PlaywrightUtil;
 import com.microsoft.playwright.Locator;
@@ -271,12 +272,18 @@ public class Job51 {
                 }
 
                 try {
+                    String title = i < titles.count() ? titles.nth(i).textContent() : "未知职位";
+                    String company = i < companies.count() ? companies.nth(i).textContent() : "未知公司";
+                    // 排除规则：法律类 / 招聘猎头类岗位不勾选（不投递）
+                    String excludeHit = JobExcludeRules.matchedTerm(
+                            (title == null ? "" : title) + " " + (company == null ? "" : company));
+                    if (excludeHit != null) {
+                        log.info("命中排除关键词[{}]，跳过：{} | {}", excludeHit, company, title);
+                        continue;
+                    }
                     Locator checkbox = checkboxes.nth(i);
                     // 使用JavaScript点击，避免元素被遮挡
                     checkbox.evaluate("el => el.click()");
-
-                    String title = i < titles.count() ? titles.nth(i).textContent() : "未知职位";
-                    String company = i < companies.count() ? companies.nth(i).textContent() : "未知公司";
                     String jobInfo = company + " | " + title;
                     resultList.add(jobInfo);
 //                    log.info("选中: {}", jobInfo);

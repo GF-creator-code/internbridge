@@ -239,7 +239,8 @@ public class ZhiLian {
         if (text == null || text.isBlank()) {
             return false;
         }
-        String[] terms = {"法务", "法律", "律师", "律所", "非诉", "诉讼", "仲裁", "知识产权", "专利"};
+        String[] terms = {"法务", "法律", "律师", "律所", "非诉", "诉讼", "仲裁", "知识产权", "专利",
+                "招聘", "猎头", "獵頭"};
         for (String t : terms) {
             if (text.contains(t)) {
                 return true;
