@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.getjobs.application.entity.JobsdbConfigEntity;
 import com.getjobs.application.entity.JobsdbJobDataEntity;
+import com.getjobs.application.worker.ProfileApplier;
 import com.getjobs.application.mapper.JobsdbConfigMapper;
 import com.getjobs.application.mapper.JobsdbJobDataMapper;
 import com.getjobs.worker.jobsdb.JobsdbConfig;
@@ -27,6 +28,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class JobsdbService {
     private final JobsdbConfigMapper jobsdbConfigMapper;
+    private final ProfileApplier profileApplier;
     private final JobsdbJobDataMapper jobsdbJobDataMapper;
     private final DataSource dataSource;
 
@@ -51,12 +53,14 @@ public class JobsdbService {
             return config;
         }
         config.setKeywords(parseListString(entity.getKeywords()));
+        config.setKeywords(profileApplier.applyKeywords(config.getKeywords()));
         config.setCity(safeTrim(entity.getCity()) == null ? "香港" : safeTrim(entity.getCity()));
         config.setAccount(safeTrim(entity.getAccount()));
         config.setPassword(entity.getPassword());
         config.setResumePath(safeTrim(entity.getResumePath()));
         config.setIncludeKeywords(com.getjobs.worker.utils.KeywordFilter.parse(entity.getIncludeKeywords()));
         config.setExcludeKeywords(com.getjobs.worker.utils.KeywordFilter.parse(entity.getExcludeKeywords()));
+        config.setExcludeKeywords(profileApplier.applyExcludeKeywords(config.getExcludeKeywords()));
         config.setEnableAi(entity.getEnableAi() == null || entity.getEnableAi());
         config.setWaitTime(entity.getWaitTime() == null ? 2 : entity.getWaitTime());
         config.setCollectOnly(!Boolean.FALSE.equals(entity.getCollectOnly()));

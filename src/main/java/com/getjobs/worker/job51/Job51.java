@@ -19,8 +19,6 @@ import java.util.List;
 import java.util.function.Supplier;
 
 /**
- * @author loks666
- * 项目链接: <a href="https://github.com/loks666/get_jobs">https://github.com/loks666/get_jobs</a>
  * 前程无忧自动投递简历 - Playwright版本
  */
 @Slf4j

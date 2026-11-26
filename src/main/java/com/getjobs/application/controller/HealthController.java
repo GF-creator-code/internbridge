@@ -26,7 +26,7 @@ public class HealthController {
         Map<String, Object> response = new HashMap<>();
         response.put("status", "UP");
         response.put("timestamp", System.currentTimeMillis());
-        response.put("service", "GetJobs");
+        response.put("service", "InternBridge");
         return ResponseEntity.ok(response);
     }
 }

@@ -6,13 +6,21 @@ import { BiLogIn, BiLogOut, BiSave, BiBriefcase, BiPlay, BiStop } from 'react-ic
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { Select } from '@/components/ui/select'
 import { Label } from '@/components/ui/label'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import AnalysisContent from '@/app/offertoday/analysis/AnalysisContent'
 import PageHeader from '@/app/components/PageHeader'
+import PlatformTip from '@/app/components/PlatformTip'
 import ToggleSwitch, { toBool } from '@/app/components/ToggleSwitch'
 import KeywordListsField, { parseKeywordList, serializeKeywordList } from '@/app/components/KeywordListsField'
 import { API_BASE } from '@/lib/api'
+import { parseKeywordsForDisplay, serializeKeywords } from '@/lib/keywords'
+import FeedbackBar from '@/app/components/FeedbackBar'
+import ConfigLoadError from '@/app/components/ConfigLoadError'
+import { useTaskControl } from '@/lib/useTaskControl'
+import { useTaskProgress } from '@/lib/useTaskProgress'
+import TaskProgressPanel from '@/app/components/TaskProgressPanel'
 
 interface OfferTodayConfig {
   id?: number
@@ -28,7 +36,10 @@ interface OfferTodayConfig {
 
 export default function OfferTodayPage() {
   const [isLoggedIn, setIsLoggedIn] = useState(false)
-  const [isDelivering, setIsDelivering] = useState(false)
+  // 投递任务的启停与失败反馈统一由 useTaskControl 提供
+  const task = useTaskControl(API_BASE)
+  const isDelivering = task.isRunning
+  const progress = useTaskProgress('offertoday')
   const [checkingLogin, setCheckingLogin] = useState(true)
   const [showLogoutDialog, setShowLogoutDialog] = useState(false)
   const [showSaveDialog, setShowSaveDialog] = useState(false)
@@ -39,6 +50,14 @@ export default function OfferTodayPage() {
 
   const [config, setConfig] = useState<OfferTodayConfig>({ keywords: '', city: '香港', account: '', password: '', includeKeywords: '', excludeKeywords: '', enableAi: true, waitTime: 2 })
   const [loadingConfig, setLoadingConfig] = useState(true)
+  // 配置加载失败要显式告诉用户，否则空表单会被误当成真实配置
+  const [configLoadError, setConfigLoadError] = useState(false)
+  // 保存前的配置快照。用来判断「改了但没保存」——
+  // 原先六个平台都没有这个判断，用户改了关键词直接点开始投递，
+  // 跑的还是旧配置，而且界面完全看不出来。
+  const [savedConfig, setSavedConfig] = useState<OfferTodayConfig | null>(null)
+  const dirty = savedConfig !== null && (Object.keys(config) as (keyof OfferTodayConfig)[])
+    .some(key => savedConfig[key] !== config[key])
 
   useEffect(() => {
     if (typeof window === 'undefined' || typeof EventSource === 'undefined') {
@@ -52,6 +71,23 @@ export default function OfferTodayPage() {
       onError: (e, attempt, delay) => {
         console.warn(`[OfferToday SSE] 连接错误，第${attempt}次重连，延迟 ${delay}ms`, e)
         setCheckingLogin(false)
+      },
+      // 断线重连后补一次登录态拉取。SSE 断开期间服务端推的状态变化已经丢了，
+      // 只依赖推送的话，页面会永远停在「请先登录」——而用户其实早就登录了。
+      onReconnect: () => {
+        void (async () => {
+          try {
+            const res = await fetch(`${API_BASE}/api/offertoday/login-status`)
+            if (!res.ok) return
+            const data = await res.json()
+            if (typeof data.isLoggedIn === 'boolean') {
+              setIsLoggedIn(data.isLoggedIn)
+              setCheckingLogin(false)
+            }
+          } catch {
+            // 补偿拉取失败不影响后续重连
+          }
+        })()
       },
       listeners: [
         {
@@ -87,46 +123,23 @@ export default function OfferTodayPage() {
     return () => client.close()
   }, [])
 
-  const parseKeywordsFromDb = (raw?: string): string => {
-    if (!raw) return ''
-    const t = raw.trim()
-    if (t.startsWith('[') && t.endsWith(']')) {
-      try {
-        const arr = JSON.parse(t)
-        if (Array.isArray(arr)) return arr.filter(Boolean).join(', ')
-      } catch (e) {
-        console.warn('[OfferToday] 解析关键词JSON失败，使用原值:', e)
-      }
-    }
-    return t.replace(/，/g, ',')
-  }
-
-  const serializeKeywordsForDb = (display?: string): string => {
-    const raw = (display || '').trim()
-    if (!raw) return '[]'
-    const norm = raw.replace(/，/g, ',')
-    const tokens = norm
-      .split(',')
-      .map((s) => s.trim())
-      .filter((s) => s.length > 0)
-    return JSON.stringify(tokens)
-  }
-
   const fetchAllData = async () => {
     try {
       const res = await fetch(`${API_BASE}/api/offertoday/config`)
       const data = await res.json()
       if (data.config) {
         const normalized = { ...data.config }
-        normalized.keywords = parseKeywordsFromDb(data.config.keywords)
+        normalized.keywords = parseKeywordsForDisplay(data.config.keywords)
         normalized.includeKeywords = parseKeywordList(data.config.includeKeywords)
         normalized.excludeKeywords = parseKeywordList(data.config.excludeKeywords)
         normalized.enableAi = toBool(data.config.enableAi, true)
         normalized.waitTime = Number(data.config.waitTime) > 0 ? Number(data.config.waitTime) : 2
         setConfig(normalized)
+        setSavedConfig(normalized)
       }
     } catch (e) {
       console.error('[OfferToday] 获取配置失败:', e)
+      setConfigLoadError(true)
     } finally {
       setLoadingConfig(false)
     }
@@ -164,23 +177,19 @@ export default function OfferTodayPage() {
     }
   }
 
+  // 启动/停止的统一调用与失败反馈见 lib/useTaskControl。
+  // 原先这里把后端返回的中文原因丢进了 console，界面上什么都不显示。
   const handleStartDelivery = async () => {
-    try {
-      setIsDelivering(true)
-      const response = await fetch(`${API_BASE}/api/offertoday/start`, { method: 'POST' })
-      const data = await response.json()
-      if (!data.success) setIsDelivering(false)
-    } catch (error) {
-      setIsDelivering(false)
+    // 有未保存的修改时拦一道：不然跑的是旧配置，而用户以为改了就是改了
+    if (dirty) {
+      task.report({ kind: 'error', title: '请先保存配置', message: '当前配置有尚未保存的修改，直接开始投递会使用上一次保存的关键词和城市。' })
+      return
     }
+    await task.start('offertoday')
   }
 
   const handleStopDelivery = async () => {
-    try {
-      const response = await fetch(`${API_BASE}/api/offertoday/stop`, { method: 'POST' })
-      const data = await response.json()
-      if (data.success) setIsDelivering(false)
-    } catch (error) {}
+    await task.stop('offertoday')
   }
 
   const triggerLogout = async () => {
@@ -200,7 +209,7 @@ export default function OfferTodayPage() {
     try {
       const payload = {
         ...config,
-        keywords: serializeKeywordsForDb(config.keywords),
+        keywords: serializeKeywords(config.keywords),
         includeKeywords: serializeKeywordList(config.includeKeywords),
         excludeKeywords: serializeKeywordList(config.excludeKeywords),
       }
@@ -212,7 +221,7 @@ export default function OfferTodayPage() {
       if (response.ok) {
         try { await fetch(`${API_BASE}/api/cookie/save?platform=offertoday`, { method: 'POST' }) } catch {}
         await fetchAllData()
-        setSaveResult({ success: true, message: '保存成功，配置已更新。' })
+        setSaveResult({ success: true, message: '保存成功，配置已更新。新配置在下次启动投递任务时生效。' })
       } else {
         setSaveResult({ success: false, message: '保存失败：后端返回异常状态。' })
       }
@@ -228,8 +237,8 @@ export default function OfferTodayPage() {
     <div className="space-y-6">
       <PageHeader
         icon={<BiBriefcase className="text-2xl" />}
-        title="OfferToday 配置"
-        subtitle="香港实习岗自动投递（只投「實習」类型）"
+        title="OfferToday"
+        subtitle="香港岗位自动投递，只处理「實習」类型卡片。"
         iconClass="text-white"
         accentBgClass="bg-sky-600"
         actions={
@@ -260,6 +269,22 @@ export default function OfferTodayPage() {
           </div>
         }
       />
+      <FeedbackBar feedback={task.feedback} onDismiss={task.clearFeedback} />
+      {dirty && (
+        <p role="status" className="text-sm text-amber-600 dark:text-amber-400">
+          有尚未保存的配置修改。请先点「保存配置」，再开始投递任务，否则会使用上一次保存的设置。
+        </p>
+      )}
+      {configLoadError && (
+        <ConfigLoadError onRetry={() => { setConfigLoadError(false); void fetchAllData() }} />
+      )}
+      <TaskProgressPanel
+        latest={progress.latest}
+        history={progress.history}
+        connected={progress.connected}
+        isRunning={isDelivering}
+        onClear={progress.clear}
+      />
 
       <Tabs defaultValue="config" className="w-full">
         <TabsList className="grid w-full grid-cols-2">
@@ -268,21 +293,10 @@ export default function OfferTodayPage() {
         </TabsList>
 
         <TabsContent value="config" className="space-y-6 mt-6">
-          <Card className="animate-in fade-in slide-in-from-bottom-5 duration-700">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <BiBriefcase className="text-primary" />
-                OfferToday 平台说明
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <p className="text-sm text-muted-foreground">OfferToday 是香港招聘平台，岗位全部在香港，薪资以 HKD 计。</p>
-                <p className="text-sm text-muted-foreground">填好账号密码后点「登录 OfferToday」，系统会自动登录并保存 Cookie；失败时请在浏览器窗口手动完成。</p>
-                <p className="text-sm text-muted-foreground">投递只针对卡片类型为「實習」的岗位，招呼语按 JD 用 AI 生成。</p>
-              </div>
-            </CardContent>
-          </Card>
+          <PlatformTip title="平台须知">
+            <p>香港站，岗位全部在香港，薪资以 HKD 计。填好账号密码后点「登录 OfferToday」，自动登录失败时请在浏览器窗口手动完成。</p>
+            <p>只对卡片类型为「實習」的岗位投递，打招呼语按岗位 JD 用 AI 生成。</p>
+          </PlatformTip>
 
           <Card className="animate-in fade-in slide-in-from-bottom-5 duration-700">
             <CardHeader>
@@ -306,12 +320,12 @@ export default function OfferTodayPage() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label>城市</Label>
-                    <Input
-                      placeholder="香港"
-                      value={config.city || ''}
-                      onChange={(e) => setConfig((c) => ({ ...c, city: e.target.value }))}
-                    />
+                    <Label htmlFor="offertoday-city">城市</Label>
+                    <Select id="offertoday-city" value={config.city || '香港'}
+                      onChange={(e) => setConfig((c) => ({ ...c, city: e.target.value }))}>
+                      <option value="香港">香港</option>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">OfferToday 目前只提供香港岗位。</p>
                   </div>
                   <div className="space-y-2">
                     <Label>登录账号（邮箱或手机号）</Label>
@@ -344,12 +358,12 @@ export default function OfferTodayPage() {
                   />
                   <div className="flex flex-col gap-3 border-t pt-3 sm:flex-row sm:items-center sm:justify-between">
                     <div className="space-y-1">
-                      <Label htmlFor="enableAi" className="text-base font-medium">AI 生成招呼语</Label>
+                      <Label htmlFor="enableAi" className="text-base font-medium">AI 生成打招呼语</Label>
                       <p className="text-sm text-muted-foreground">按岗位 JD 自动生成打招呼语；关闭后使用默认模板。</p>
                     </div>
                     <ToggleSwitch
                       id="enableAi"
-                      label="AI 生成招呼语"
+                      label="AI 生成打招呼语"
                       checked={!!config.enableAi}
                       onToggle={() => setConfig((c) => ({ ...c, enableAi: !c.enableAi }))}
                     />

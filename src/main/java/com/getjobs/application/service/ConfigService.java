@@ -9,6 +9,7 @@ import com.getjobs.application.service.BossService;
 import com.getjobs.application.service.ZhilianService;
 import com.getjobs.application.service.ShixisengService;
 import com.getjobs.application.service.Job51Service;
+import com.getjobs.application.worker.ProfileApplier;
 import com.getjobs.worker.boss.BossConfig;
 import com.getjobs.worker.job51.Job51Config;
 import com.getjobs.worker.liepin.LiepinConfig;
@@ -22,6 +23,7 @@ import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * 配置服务类
@@ -38,20 +40,58 @@ public class ConfigService {
     private final Job51Service job51Service;
     private final OfferTodayService offerTodayService;
     private final JobsdbService jobsdbService;
+    private final ProfileApplier profileApplier;
 
     /**
-     * 获取所有配置（以Map形式返回）
-     * @return 配置Map，key为config_key，value为config_value
+     * 需要脱敏的配置键。这些值是凭据类信息，读取接口一律不回传明文。
+     */
+    private static final Set<String> SECRET_KEYS = Set.of("API_KEY", "HOOK_URL");
+
+    /**
+     * 脱敏占位前缀。前端据此判断「该键已配置但值被隐藏」，
+     * 从而把输入框留空、而不是把掩码当成真实值提交回去。
+     */
+    public static final String MASK_PREFIX = "••••";
+
+    /**
+     * 获取所有配置（以Map形式返回），敏感键脱敏。
+     * <p>
+     * API_KEY / HOOK_URL 属于凭据。原先这里直接返回明文，前端还能一键「显示」，
+     * 演示、截图、录屏都会连带泄露密钥。这里改为只回传掩码。
+     *
+     * @return 配置Map，key为config_key，value为config_value（敏感键已脱敏）
      */
     public Map<String, String> getAllConfigsAsMap() {
         List<ConfigEntity> configs = configMapper.selectList(null);
         Map<String, String> configMap = new HashMap<>();
 
         for (ConfigEntity config : configs) {
-            configMap.put(config.getConfigKey(), config.getConfigValue());
+            String key = config.getConfigKey();
+            String value = config.getConfigValue();
+            configMap.put(key, isSecretKey(key) ? maskSecret(value) : value);
         }
 
         return configMap;
+    }
+
+    /** 是否为需要脱敏的凭据类配置键 */
+    public static boolean isSecretKey(String configKey) {
+        return configKey != null && SECRET_KEYS.contains(configKey.toUpperCase());
+    }
+
+    /**
+     * 掩码生成规则：空值返回空串（表示未配置）；否则保留末尾 4 位便于用户辨认，
+     * 其余以占位符盖住。长度不足 8 位的值全部盖住，避免泄露短密钥。
+     */
+    public static String maskSecret(String value) {
+        if (value == null || value.isBlank()) {
+            return "";
+        }
+        String trimmed = value.trim();
+        if (trimmed.length() <= 8) {
+            return MASK_PREFIX;
+        }
+        return MASK_PREFIX + trimmed.substring(trimmed.length() - 4);
     }
 
     /**
@@ -133,12 +173,24 @@ public class ConfigService {
         int updateCount = 0;
 
         for (Map.Entry<String, String> entry : configMap.entrySet()) {
+            if (isSecretKey(entry.getKey()) && isMaskedValue(entry.getValue())) {
+                // 前端把脱敏后的掩码原样传回来了（比如用户没改密钥却点了保存）。
+                // 这时候必须跳过，否则会把 "••••1234" 当成真实密钥写进库，
+                // AI 调用立刻失效，而且用户看不出哪里出了问题。
+                log.debug("配置键 {} 收到掩码值，跳过写入以保留原值", entry.getKey());
+                continue;
+            }
             if (upsertConfig(entry.getKey(), entry.getValue())) {
                 updateCount++;
             }
         }
 
         return updateCount;
+    }
+
+    /** 判断一个值是否是脱敏掩码（而不是用户输入的真实值） */
+    public static boolean isMaskedValue(String value) {
+        return value != null && value.startsWith(MASK_PREFIX);
     }
 
     /**
@@ -240,6 +292,7 @@ public class ConfigService {
             }
         }
         config.setKeywords(keywords);
+        config.setKeywords(profileApplier.applyKeywords(keywords));
 
         // 城市编码：允许传中文名或代码；中文名映射为代码；缺省视为不限
         String cityCode = "";

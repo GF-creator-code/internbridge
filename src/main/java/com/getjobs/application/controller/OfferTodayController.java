@@ -3,6 +3,7 @@ package com.getjobs.application.controller;
 import com.getjobs.application.entity.CookieEntity;
 import com.getjobs.application.entity.OfferTodayConfigEntity;
 import com.getjobs.application.service.CookieService;
+import com.getjobs.application.service.TaskProgressBroadcaster;
 import com.getjobs.application.service.OfferTodayService;
 import com.getjobs.worker.manager.PlaywrightManager;
 import com.getjobs.worker.service.OfferTodayJobService;
@@ -36,6 +37,9 @@ public class OfferTodayController {
 
     @Autowired
     private OfferTodayJobService offerTodayJobService;
+
+    @Autowired
+    private TaskProgressBroadcaster taskProgressBroadcaster;
 
     // ==================== 配置管理 ====================
 
@@ -211,8 +215,10 @@ public class OfferTodayController {
             }
 
             CompletableFuture.runAsync(() -> {
-                offerTodayJobService.executeDelivery(progressMessage ->
-                        log.info("[{}] {}", progressMessage.getPlatform(), progressMessage.getMessage()));
+                offerTodayJobService.executeDelivery(progressMessage -> {
+                    log.info("[{}] {}", progressMessage.getPlatform(), progressMessage.getMessage());
+                    taskProgressBroadcaster.broadcast(progressMessage);
+                });
             });
 
             response.put("success", true);

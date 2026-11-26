@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.getjobs.application.entity.ZhilianConfigEntity;
 import com.getjobs.application.entity.ZhilianOptionEntity;
 import com.getjobs.application.entity.ZhilianJobDataEntity;
+import com.getjobs.application.worker.ProfileApplier;
 import com.getjobs.application.mapper.ZhilianConfigMapper;
 import com.getjobs.application.mapper.ZhilianOptionMapper;
 import com.getjobs.application.mapper.ZhilianJobDataMapper;
@@ -28,6 +29,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class ZhilianService {
     private final ZhilianConfigMapper zhilianConfigMapper;
+    private final ProfileApplier profileApplier;
     private final ZhilianOptionMapper zhilianOptionMapper;
     private final ZhilianJobDataMapper zhilianJobDataMapper;
     private final DataSource dataSource;
@@ -53,6 +55,7 @@ public class ZhilianService {
 
         // 关键词解析：支持逗号或括号列表
         config.setKeywords(parseListString(entity.getKeywords()));
+        config.setKeywords(profileApplier.applyKeywords(config.getKeywords()));
 
         // 城市：中文名映射到代码；缺省或“不限”映射为 0
         String city = safeTrim(entity.getCityCode());

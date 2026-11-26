@@ -2,6 +2,7 @@ package com.getjobs.application.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.getjobs.application.service.CookieService;
+import com.getjobs.application.service.TaskProgressBroadcaster;
 import com.getjobs.worker.dto.JobProgressMessage;
 import com.getjobs.worker.manager.PlaywrightManager;
 import com.getjobs.worker.service.BossJobService;
@@ -37,6 +38,8 @@ public class BossController {
     private final PlaywrightManager playwrightManager;
     private final CookieService cookieService;
 
+    private final TaskProgressBroadcaster taskProgressBroadcaster;
+
     private final List<SseEmitter> bossProgressEmitters = new CopyOnWriteArrayList<>();
 
     /** SSE - Boss投递任务进度推送 */
@@ -66,25 +69,6 @@ public class BossController {
         return emitter;
     }
 
-    /** POST - 启动Boss投递任务 */
-    @PostMapping("/execute")
-    public ResponseEntity<Map<String, Object>> executeBoss() {
-        if (bossJobService.isRunning()) {
-            return ResponseEntity.ok(Map.of(
-                    "status", "already_running",
-                    "message", "Boss投递任务已在运行中"
-            ));
-        }
-
-        CompletableFuture.runAsync(() -> bossJobService.executeDelivery(this::sendBossProgress));
-
-        return ResponseEntity.ok(Map.of(
-                "status", "started",
-                "message", "Boss投递任务已启动"
-        ));
-    }
-
-    /** POST - 启动Boss投递任务（前端使用的接口）*/
     @PostMapping("/start")
     public ResponseEntity<Map<String, Object>> startBoss() {
         Map<String, Object> response = new HashMap<>();
@@ -176,6 +160,9 @@ public class BossController {
     }
 
     private void sendBossProgress(JobProgressMessage message) {
+        // 同时转发到统一的进度广播器，前端只需订阅 /api/jobs/progress/stream
+        taskProgressBroadcaster.broadcast(message);
+
         List<SseEmitter> deadEmitters = new CopyOnWriteArrayList<>();
         for (SseEmitter emitter : bossProgressEmitters) {
             try {

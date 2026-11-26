@@ -11,7 +11,14 @@ import { Select } from '@/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import AnalysisContent from '@/app/liepin/analysis/AnalysisContent'
 import PageHeader from '@/app/components/PageHeader'
+import PlatformTip from '@/app/components/PlatformTip'
 import { API_BASE } from '@/lib/api'
+import { parseKeywordsForDisplay, serializeKeywords } from '@/lib/keywords'
+import FeedbackBar from '@/app/components/FeedbackBar'
+import ConfigLoadError from '@/app/components/ConfigLoadError'
+import { useTaskControl } from '@/lib/useTaskControl'
+import { useTaskProgress } from '@/lib/useTaskProgress'
+import TaskProgressPanel from '@/app/components/TaskProgressPanel'
 
 interface LiepinConfig {
   id?: number
@@ -41,11 +48,21 @@ export default function LiepinPage() {
     city: [],
   })
   const [loading, setLoading] = useState(true)
+  // 配置加载失败要显式告诉用户，否则空表单会被误当成真实配置
+  const [configLoadError, setConfigLoadError] = useState(false)
+  // 保存前的配置快照。用来判断「改了但没保存」——
+  // 原先六个平台都没有这个判断，用户改了关键词直接点开始投递，
+  // 跑的还是旧配置，而且界面完全看不出来。
+  const [savedConfig, setSavedConfig] = useState<LiepinConfig | null>(null)
+  const dirty = savedConfig !== null && (Object.keys(config) as (keyof LiepinConfig)[])
+    .some(key => savedConfig[key] !== config[key])
   const [showSaveDialog, setShowSaveDialog] = useState(false)
   const [saveResult, setSaveResult] = useState<{ success: boolean; message: string } | null>(null)
-  const [isCustomCity, setIsCustomCity] = useState(false) // 是否手动输入城市
   const [isLoggedIn, setIsLoggedIn] = useState(false)
-  const [isDelivering, setIsDelivering] = useState(false)
+  // 投递任务的启停与失败反馈统一由 useTaskControl 提供
+  const task = useTaskControl(API_BASE)
+  const isDelivering = task.isRunning
+  const progress = useTaskProgress('liepin')
   const [checkingLogin, setCheckingLogin] = useState(true)
   const [showLogoutDialog, setShowLogoutDialog] = useState(false)
   const [showLogoutResultDialog, setShowLogoutResultDialog] = useState(false)
@@ -68,6 +85,23 @@ export default function LiepinPage() {
       onError: (e, attempt, delay) => {
         console.warn(`[SSE] 连接错误，准备第${attempt}次重连，延迟 ${delay}ms`, e)
         setCheckingLogin(false)
+      },
+      // 断线重连后补一次登录态拉取。SSE 断开期间服务端推的状态变化已经丢了，
+      // 只依赖推送的话，页面会永远停在「请先登录」——而用户其实早就登录了。
+      onReconnect: () => {
+        void (async () => {
+          try {
+            const res = await fetch(`${API_BASE}/api/liepin/login-status`)
+            if (!res.ok) return
+            const data = await res.json()
+            if (typeof data.isLoggedIn === 'boolean') {
+              setIsLoggedIn(data.isLoggedIn)
+              setCheckingLogin(false)
+            }
+          } catch {
+            // 补偿拉取失败不影响后续重连
+          }
+        })()
       },
       listeners: [
         {
@@ -106,33 +140,7 @@ export default function LiepinPage() {
   }, [])
 
   // 将数据库中的 JSON 数组字符串转换为逗号分隔的可读字符串
-  const parseKeywordsFromDb = (raw?: string): string => {
-    if (!raw) return ''
-    const t = raw.trim()
-    if (t.startsWith('[') && t.endsWith(']')) {
-      try {
-        const arr = JSON.parse(t)
-        if (Array.isArray(arr)) return arr.filter(Boolean).join(', ')
-      } catch (e) {
-        console.warn('解析关键词JSON失败，使用原值:', e)
-      }
-    }
-    // 兼容逗号或中文逗号分隔的原始字符串
-    return t.replace(/，/g, ',')
-  }
-
   // 将输入的逗号分隔字符串转换为 JSON 数组字符串保存到数据库
-  const serializeKeywordsForDb = (display?: string): string => {
-    const raw = (display || '').trim()
-    if (!raw) return '[]'
-    const norm = raw.replace(/，/g, ',')
-    const tokens = norm
-      .split(',')
-      .map((s) => s.trim())
-      .filter((s) => s.length > 0)
-    return JSON.stringify(tokens)
-  }
-
   const fetchAllData = async () => {
     try {
       const response = await fetch(`${API_BASE}/api/liepin/config`)
@@ -142,19 +150,16 @@ export default function LiepinPage() {
 
       if (data.config) {
         const normalized = { ...data.config }
-        normalized.keywords = parseKeywordsFromDb(data.config.keywords)
+        normalized.keywords = parseKeywordsForDisplay(data.config.keywords)
         setConfig(normalized)
-        // 检查当前城市是否在选项列表中
-        if (data.options?.city && data.config.city) {
-          const cityExists = data.options.city.some((c: LiepinOption) => c.name === data.config.city || c.code === data.config.city)
-          setIsCustomCity(!cityExists)
-        }
+        setSavedConfig(normalized)
       }
       if (data.options) {
         setOptions(data.options)
       }
     } catch (error) {
       console.error('Failed to fetch liepin data:', error)
+      setConfigLoadError(true)
     } finally {
       setLoading(false)
     }
@@ -162,7 +167,7 @@ export default function LiepinPage() {
 
   const handleSave = async () => {
     try {
-      const payload = { ...config, keywords: serializeKeywordsForDb(config.keywords) }
+      const payload = { ...config, keywords: serializeKeywords(config.keywords) }
       const response = await fetch(`${API_BASE}/api/liepin/config`, {
         method: 'PUT',
         headers: {
@@ -180,7 +185,7 @@ export default function LiepinPage() {
         }
 
         fetchAllData()
-        setSaveResult({ success: true, message: '保存成功，配置与Cookie已更新。' })
+        setSaveResult({ success: true, message: '保存成功，配置与Cookie已更新。新配置在下次启动投递任务时生效。' })
         setShowSaveDialog(true)
       } else {
         console.warn('保存失败：后端返回非 2xx 状态')
@@ -194,46 +199,19 @@ export default function LiepinPage() {
     }
   }
 
+  // 启动/停止的统一调用与失败反馈见 lib/useTaskControl。
+  // 原先失败原因只写进 console，界面完全没有提示。
   const handleStartDelivery = async () => {
-    try {
-      setIsDelivering(true)
-      const response = await fetch(`${API_BASE}/api/liepin/start`, {
-        method: 'POST',
-      })
-      const data = await response.json()
-
-      if (data.success) {
-        // 启动成功：不弹框
-      } else {
-        // 启动失败：不弹框
-        console.warn('启动失败：', data.message)
-        setIsDelivering(false)
-      }
-    } catch (error) {
-      console.error('Failed to start delivery:', error)
-      // 启动失败：不弹框
-      setIsDelivering(false)
+    // 有未保存的修改时拦一道：不然跑的是旧配置，而用户以为改了就是改了
+    if (dirty) {
+      task.report({ kind: 'error', title: '请先保存配置', message: '当前配置有尚未保存的修改，直接开始投递会使用上一次保存的关键词和城市。' })
+      return
     }
+    await task.start('liepin')
   }
 
   const handleStopDelivery = async () => {
-    try {
-      const response = await fetch(`${API_BASE}/api/liepin/stop`, {
-        method: 'POST',
-      })
-      const data = await response.json()
-
-      if (data.success) {
-        // 停止成功：不弹框
-        setIsDelivering(false)
-      } else {
-        // 停止失败：不弹框
-        console.warn('停止失败：', data.message)
-      }
-    } catch (error) {
-      console.error('Failed to stop delivery:', error)
-      // 停止失败：不弹框
-    }
+    await task.stop('liepin')
   }
 
   const triggerLogout = async () => {
@@ -242,7 +220,6 @@ export default function LiepinPage() {
       const data = await response.json()
       if (data.success) {
         setIsLoggedIn(false)
-        setIsDelivering(false)
         console.info('已退出登录，数据库Cookie已置空')
         setLogoutResult({ success: true, message: '已退出登录，Cookie已清空。' })
         setShowLogoutResultDialog(true)
@@ -266,8 +243,8 @@ export default function LiepinPage() {
     <div className="space-y-6">
       <PageHeader
         icon={<BiSearch className="text-2xl" />}
-        title="猎聘配置"
-        subtitle="配置猎聘平台的求职参数"
+        title="猎聘"
+        subtitle="按关键词与城市筛选岗位，扫码登录后启动自动投递。"
         iconClass="text-white"
         accentBgClass="bg-purple-500"
         actions={
@@ -298,6 +275,22 @@ export default function LiepinPage() {
           </div>
         }
       />
+      <FeedbackBar feedback={task.feedback} onDismiss={task.clearFeedback} />
+      {dirty && (
+        <p role="status" className="text-sm text-amber-600 dark:text-amber-400">
+          有尚未保存的配置修改。请先点「保存配置」，再开始投递任务，否则会使用上一次保存的设置。
+        </p>
+      )}
+      {configLoadError && (
+        <ConfigLoadError onRetry={() => { setConfigLoadError(false); void fetchAllData() }} />
+      )}
+      <TaskProgressPanel
+        latest={progress.latest}
+        history={progress.history}
+        connected={progress.connected}
+        isRunning={isDelivering}
+        onClear={progress.clear}
+      />
 
       <Tabs defaultValue="config" className="w-full">
         <TabsList className="grid w-full grid-cols-2">
@@ -306,23 +299,10 @@ export default function LiepinPage() {
         </TabsList>
 
         <TabsContent value="config" className="space-y-6 mt-6">
-        {/* 平台说明 */}
-        <Card className="animate-in fade-in slide-in-from-bottom-5 duration-700">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <BiBriefcase className="text-primary" />
-              猎聘平台说明
-            </CardTitle>
-            <CardDescription>登录与投递操作提示</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <p className="text-sm text-muted-foreground">请在浏览器标签页中登录 猎聘 平台，登录成功后系统会自动检测登录状态。</p>
-              <p className="text-sm text-muted-foreground">登录成功后，点击“开始投递”按钮启动自动投递任务。</p>
-              <p className="text-sm text-muted-foreground">点击“保存配置”按钮可手动保存当前登录相关信息到数据库。</p>
-            </div>
-          </CardContent>
-        </Card>
+        <PlatformTip>
+          <p>先在浏览器标签页用微信扫码登录猎聘，登录态会自动检测；改完点「保存配置」，再点「开始投递」。</p>
+          <p>建议在猎聘 App 里预先设好自定义打招呼语；平台对主动私信有频控，实际限额以平台提示为准。</p>
+        </PlatformTip>
 
         {/* 搜索配置 */}
         <Card className="animate-in fade-in slide-in-from-bottom-5 duration-700">
@@ -347,46 +327,21 @@ export default function LiepinPage() {
               </div>
 
               <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="city">工作城市</Label>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsCustomCity(!isCustomCity)
-                      if (!isCustomCity) {
-                        // 切换到手动输入时，清空当前值
-                        setConfig({ ...config, city: '' })
-                      }
-                    }}
-                    className="text-xs text-primary hover:underline"
-                  >
-                    {isCustomCity ? '从列表选择' : '手动输入'}
-                  </button>
-                </div>
-                {isCustomCity ? (
-                  <Input
-                    id="city"
-                    value={config.city || ''}
-                    onChange={(e) => setConfig({ ...config, city: e.target.value })}
-                    placeholder="请输入城市码，例如：410"
-                  />
-                ) : (
-                  <Select
-                    id="city"
-                    value={config.city || ''}
-                    onChange={(e) => setConfig({ ...config, city: e.target.value })}
-                  >
-                    <option value="">请选择城市</option>
-                    {options.city.map((city) => (
-                      <option key={city.id} value={city.name}>
-                        {city.name}
-                      </option>
-                    ))}
-                  </Select>
-                )}
-                <p className="text-xs text-muted-foreground">
-                  {isCustomCity ? '手动输入城市码（例如：410代表北京）' : '从列表选择城市，或点击"手动输入"自定义'}
-                </p>
+                <Label htmlFor="city">工作城市</Label>
+                <Select
+                  id="city"
+                  value={config.city || ''}
+                  onChange={(e) => setConfig({ ...config, city: e.target.value })}
+                >
+                  <option value="">请选择城市</option>
+                  {options.city.map((city) => (
+                    <option key={city.id} value={city.name}>{city.name}</option>
+                  ))}
+                  {config.city && !options.city.some((city) => city.name === config.city) && (
+                    <option value={config.city}>{config.city}（当前配置）</option>
+                  )}
+                </Select>
+                <p className="text-xs text-muted-foreground">从列表选择工作城市；已有配置不在列表中时会显示为「当前配置」。</p>
               </div>
             </div>
           </CardContent>

@@ -11,6 +11,12 @@ export type SSEBackoffOptions = {
   listeners: SSEListener[];
   onOpen?: () => void;
   onError?: (error: any, attempt: number, delayMs: number) => void;
+  /**
+   * 重连成功后调用。用于补偿「断线期间错过的状态变化」——
+   * SSE 断开时服务端推的登录状态变化前端收不到，
+   * 如果只依赖推送，页面会永远停留在断线前的状态（比如一直显示「请先登录」）。
+   */
+  onReconnect?: () => void;
   backoff?: BackoffConfig;
 };
 
@@ -56,8 +62,18 @@ export function createSSEWithBackoff(url: string, options: SSEBackoffOptions): S
       options.listeners.forEach((l) => es?.addEventListener(l.name, l.handler));
 
       es.onopen = () => {
+        const wasReconnect = attempt > 0;
         attempt = 0; // 重置重试计数
         options.onOpen?.();
+        // 重连成功后补一次状态拉取：断线期间服务端推的消息已经丢了，
+        // 只靠推送的话，页面会永久停留在断线前的状态。
+        if (wasReconnect) {
+          try {
+            options.onReconnect?.();
+          } catch (err) {
+            console.warn('[SSE] 重连后的状态补偿请求失败', err);
+          }
+        }
       };
 
       es.onerror = (error) => {

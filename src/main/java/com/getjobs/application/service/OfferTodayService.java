@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.getjobs.application.entity.OfferTodayConfigEntity;
 import com.getjobs.application.entity.OfferTodayJobDataEntity;
+import com.getjobs.application.worker.ProfileApplier;
 import com.getjobs.application.mapper.OfferTodayConfigMapper;
 import com.getjobs.application.mapper.OfferTodayJobDataMapper;
 import com.getjobs.worker.offertoday.OfferTodayConfig;
@@ -27,6 +28,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class OfferTodayService {
     private final OfferTodayConfigMapper offerTodayConfigMapper;
+    private final ProfileApplier profileApplier;
     private final OfferTodayJobDataMapper offerTodayJobDataMapper;
     private final DataSource dataSource;
 
@@ -51,11 +53,13 @@ public class OfferTodayService {
             return config;
         }
         config.setKeywords(parseListString(entity.getKeywords()));
+        config.setKeywords(profileApplier.applyKeywords(config.getKeywords()));
         config.setCity(safeTrim(entity.getCity()) == null ? "香港" : safeTrim(entity.getCity()));
         config.setAccount(safeTrim(entity.getAccount()));
         config.setPassword(entity.getPassword());
         config.setIncludeKeywords(com.getjobs.worker.utils.KeywordFilter.parse(entity.getIncludeKeywords()));
         config.setExcludeKeywords(com.getjobs.worker.utils.KeywordFilter.parse(entity.getExcludeKeywords()));
+        config.setExcludeKeywords(profileApplier.applyExcludeKeywords(config.getExcludeKeywords()));
         config.setEnableAi(entity.getEnableAi() == null || entity.getEnableAi());
         config.setWaitTime(entity.getWaitTime() == null ? 2 : entity.getWaitTime());
         return config;

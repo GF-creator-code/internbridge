@@ -18,8 +18,6 @@ import java.util.List;
 import java.util.function.Supplier;
 
 /**
- * @author loks666
- * 项目链接: <a href="https://github.com/loks666/get_jobs">https://github.com/loks666/get_jobs</a>
  * <p>
  * 智联招聘自动投递（适配 2026 版新站）。
  * 新站为「左侧列表 + 右侧详情面板」：点卡片 → 右侧点「立即投递」→ 弹「已向对方发送简历和打招呼语」→ 留在此页。

@@ -270,6 +270,14 @@ public class AiService {
         if (aiEntity == null) {
             aiEntity = createDefaultConfig();
         }
+        // 兼容旧版：先前「求职档案」页把技能介绍写进了 profile.introduce，
+        // 但投递 worker 读的是 ai_config。这里做一次回退，让那份内容仍能被看到。
+        if ((aiEntity.getIntroduce() == null || aiEntity.getIntroduce().isBlank())) {
+            String profileIntroduce = configService.getConfigValue(GlobalProfileService.KEY_INTRODUCE);
+            if (profileIntroduce != null && !profileIntroduce.isBlank()) {
+                aiEntity.setIntroduce(profileIntroduce);
+            }
+        }
         return aiEntity;
     }
 
@@ -313,6 +321,12 @@ public class AiService {
             log.info("更新AI配置，ID: {}", aiEntity.getId());
         }
 
+        // 同步回全局档案，避免两份「技能介绍」各说各话
+        try {
+            configService.updateConfig(GlobalProfileService.KEY_INTRODUCE, introduce == null ? "" : introduce);
+        } catch (Exception e) {
+            log.warn("同步技能介绍到全局档案失败: {}", e.getMessage());
+        }
         return aiEntity;
     }
 

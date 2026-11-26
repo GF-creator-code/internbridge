@@ -2,8 +2,8 @@ import { defineConfig } from 'vitepress'
 
 export default defineConfig({
   lang: 'zh-CN',
-  title: 'Get Jobs - AI 找工作助手',
-  description: '面向香港和内地实习申请的本机管理端。提取简历技能、核对职位要求并查看平台岗位记录。',
+  title: 'InternBridge - 本地投递工作台',
+  description: '本地运行的跨平台职位投递管理端：统一配置、七个平台、投递进度与每日日报。',
   
   // GitHub Pages 使用仓库路径，本地开发使用根路径。
   base: process.env.DOCS_BASE || (process.env.GITHUB_ACTIONS ? '/' + (process.env.GITHUB_REPOSITORY?.split('/')[1] || 'internbridge') + '/' : '/'),
@@ -19,15 +19,14 @@ export default defineConfig({
 
   head: [
     ['link', { rel: 'icon', href: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">🍀</text></svg>' }],
-    ['meta', { name: 'keywords', content: 'Get Jobs, 找工作, 自动投简历, AI打招呼, Boss直聘, 猎聘, 智联招聘, 前程无忧, 开源求职助手' }],
-    ['meta', { name: 'author', content: 'loks666' }],
-    // 不蒜子统计脚本（防刷异步加载）
-    ['script', { async: '', src: '//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js' }]
+    ['meta', { name: 'keywords', content: 'InternBridge, 职位投递, 打招呼语, Boss直聘, 猎聘, 智联招聘, 前程无忧, JobsDB, OfferToday, 开源求职助手' }],
+    ['meta', { name: 'author', content: 'InternBridge' }],
+    ['meta', { name: 'robots', content: 'index,follow' }]
   ],
 
   themeConfig: {
     logo: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">🍀</text></svg>',
-    siteTitle: 'Get Jobs',
+    siteTitle: 'InternBridge',
 
     // 内置本地离线全文搜索（支持中文分词与提示词）
     search: {
@@ -60,16 +59,14 @@ export default defineConfig({
       { text: '首页', link: '/' },
       { text: '项目介绍', link: '/guide/introduction' },
       { text: '🚀 快速开始', link: '/guide/quick-start' },
-      { text: '⚙️ 核心配置', link: '/guide/config' },
+      { text: '⚙️ 配置说明', link: '/guide/config' },
       { text: '❓ 常见问题', link: '/guide/faq' },
       {
         text: '相关资源',
         items: [
           { text: 'GitHub 仓库', link: 'https://github.com/GF-creator-code/internbridge' },
-          { text: '上游 Gitee 镜像', link: 'https://gitee.com/lok666/get_jobs' },
           { text: '界面截图', link: '/guide/screenshots' },
           { text: '社区与贡献', link: '/guide/community' },
-          { text: '其他开源项目', link: '/guide/resources' },
           { text: '更新日志', link: '/guide/changelog' }
         ]
       }
@@ -81,11 +78,11 @@ export default defineConfig({
         text: '📖 指南与入门',
         items: [
           { text: '项目介绍与背景', link: '/guide/introduction' },
-          { text: '5分钟快速上手', link: '/guide/quick-start' }
+          { text: '快速上手', link: '/guide/quick-start' }
         ]
       },
       {
-        text: '⚙️ 系统配置详解',
+        text: '⚙️ 设置与配置',
         items: [
           { text: '核心与各平台配置', link: '/guide/config' },
           { text: 'AI 大模型与消息推送', link: '/guide/ai-and-push' }
@@ -97,8 +94,7 @@ export default defineConfig({
           { text: '常见问题与排错指南', link: '/guide/faq' },
           { text: '更新日志与版本历史', link: '/guide/changelog' },
           { text: '界面与运行截图', link: '/guide/screenshots' },
-          { text: '社区、贡献与支持', link: '/guide/community' },
-          { text: '其他开源项目', link: '/guide/resources' }
+          { text: '社区与贡献', link: '/guide/community' },
         ]
       }
     ],
@@ -124,7 +120,7 @@ export default defineConfig({
     // 页脚配置
     footer: {
       message: 'Released under the PolyForm Noncommercial 1.0.0 License.',
-      copyright: 'Copyright © 2024-PRESENT loks666 & Get Jobs Contributors'
+      copyright: 'Copyright © 2026 InternBridge'
     },
 
     docFooter: {

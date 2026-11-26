@@ -1,5 +1,7 @@
 'use client'
 
+import Link from 'next/link'
+
 // Boss platform settings, delivery controls, and configuration persistence.
 
 import { useState, useEffect, useRef, useCallback } from 'react'
@@ -14,8 +16,12 @@ import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import PageHeader from '@/app/components/PageHeader'
+import PlatformTip from '@/app/components/PlatformTip'
 import AnalysisContent from '@/app/boss/analysis/AnalysisContent'
 import { API_BASE } from '@/lib/api'
+import TaskProgressPanel from '@/app/components/TaskProgressPanel'
+import ConfigLoadError from '@/app/components/ConfigLoadError'
+import { useTaskProgress } from '@/lib/useTaskProgress'
 
 interface BossConfig {
   id?: number
@@ -110,11 +116,13 @@ export default function BossPage() {
     stage: [],
   })
   const [blacklist, setBlacklist] = useState<BlacklistItem[]>([])
-  const [newBlacklistKeyword, setNewBlacklistKeyword] = useState('')
-  const [blacklistType, setBlacklistType] = useState('company') // 默认为公司
   const [loading, setLoading] = useState(true)
+  // 配置加载失败要显式告诉用户，否则空表单会被误当成真实配置
+  const [configLoadError, setConfigLoadError] = useState(false)
   const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [isDelivering, setIsDelivering] = useState(false)
+  // 订阅投递进度：后端 /api/boss/stream 一直在推送，前端原先没有接收
+  const progress = useTaskProgress('boss')
   const [checkingLogin, setCheckingLogin] = useState(true)
   const [showLogoutDialog, setShowLogoutDialog] = useState(false)
   const [showSaveDialog, setShowSaveDialog] = useState(false)
@@ -167,6 +175,23 @@ export default function BossPage() {
       onError: (e, attempt, delay) => {
         console.warn(`[SSE] 连接错误，准备第${attempt}次重连，延迟 ${delay}ms`, e)
         setCheckingLogin(false)
+      },
+      // 断线重连后补一次登录态拉取。SSE 断开期间服务端推的状态变化已经丢了，
+      // 只依赖推送的话，页面会永远停在「请先登录」——而用户其实早就登录了。
+      onReconnect: () => {
+        void (async () => {
+          try {
+            const res = await fetch(`${API_BASE}/api/boss/status`)
+            if (!res.ok) return
+            const data = await res.json()
+            if (typeof data.isLoggedIn === 'boolean') {
+              setIsLoggedIn(data.isLoggedIn)
+              setCheckingLogin(false)
+            }
+          } catch {
+            // 补偿拉取失败不影响后续重连
+          }
+        })()
       },
       listeners: [
         {
@@ -395,6 +420,7 @@ export default function BossPage() {
       }
     } catch (error) {
       console.error('Failed to fetch data:', error)
+      setConfigLoadError(true)
     } finally {
       setLoading(false)
     }
@@ -454,7 +480,7 @@ export default function BossPage() {
 
         fetchAllData()
         if (!silent) {
-          setSaveResult({ success: true, message: '保存成功，配置与Cookie已更新。' })
+          setSaveResult({ success: true, message: '保存成功，配置与Cookie已更新。新配置在下次启动投递任务时生效。' })
           setShowSaveDialog(true)
         }
       } else {
@@ -532,55 +558,6 @@ export default function BossPage() {
       ? `${API_BASE}${resumeImage.previewUrl}?v=${resumeImage.updatedAt || 0}`
       : null
   )
-
-  const handleAddBlacklist = async () => {
-    if (!newBlacklistKeyword.trim()) {
-      // 输入为空：不弹框，直接返回
-      return
-    }
-
-    try {
-      const response = await fetch(`${API_BASE}/api/boss/config/blacklist`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          value: newBlacklistKeyword,
-          type: blacklistType, // 使用选中的类型
-        }),
-      })
-
-      if (response.ok) {
-        setNewBlacklistKeyword('')
-        fetchAllData()
-      } else {
-        // 添加失败：不弹框
-        console.warn('添加黑名单失败：后端返回非 2xx 状态')
-      }
-    } catch (error) {
-      console.error('Failed to add blacklist:', error)
-      // 添加失败：不弹框
-    }
-  }
-
-  const handleDeleteBlacklist = async (id: number) => {
-    try {
-      const response = await fetch(`${API_BASE}/api/boss/config/blacklist/${id}`, {
-        method: 'DELETE',
-      })
-
-      if (response.ok) {
-        fetchAllData()
-      } else {
-        // 删除失败：不弹框
-        console.warn('删除黑名单失败：后端返回非 2xx 状态')
-      }
-    } catch (error) {
-      console.error('Failed to delete blacklist:', error)
-      // 删除失败：不弹框
-    }
-  }
 
   const handleStartDelivery = async () => {
     try {
@@ -665,8 +642,8 @@ export default function BossPage() {
     <div className="space-y-6">
       <PageHeader
         icon={<BiBriefcase className="text-2xl" />}
-        title="Boss直聘配置"
-        subtitle="配置Boss直聘平台的求职参数"
+        title="Boss直聘"
+        subtitle="内地岗位投递、进度与回复追踪，打招呼语支持 AI 生成。"
         iconClass="text-white"
         accentBgClass="bg-teal-500"
         actions={
@@ -698,6 +675,16 @@ export default function BossPage() {
         }
       />
 
+      {configLoadError && (
+        <ConfigLoadError onRetry={() => { setConfigLoadError(false); void fetchAllData() }} />
+      )}
+      <TaskProgressPanel
+        latest={progress.latest}
+        history={progress.history}
+        connected={progress.connected}
+        isRunning={isDelivering}
+        onClear={progress.clear}
+      />
       <Tabs defaultValue="config" className="w-full">
         <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="config">平台配置</TabsTrigger>
@@ -705,23 +692,10 @@ export default function BossPage() {
         </TabsList>
 
         <TabsContent value="config" className="space-y-6 mt-6">
-          {/* 平台说明 */}
-          <Card className="animate-in fade-in slide-in-from-bottom-5 duration-700">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <BiBriefcase className="text-primary" />
-                Boss直聘平台说明
-              </CardTitle>
-              <CardDescription>登录与投递操作提示</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <p className="text-sm text-muted-foreground">请在浏览器标签页中登录 Boss 直聘平台，登录成功后系统会自动检测登录状态。</p>
-                <p className="text-sm text-muted-foreground">登录成功后，点击“开始投递”按钮启动自动投递任务。</p>
-                <p className="text-sm text-muted-foreground">点击“保存配置”按钮可手动保存当前登录相关信息到数据库。</p>
-              </div>
-            </CardContent>
-          </Card>
+          <PlatformTip>
+            <p>先在浏览器标签页登录 Boss直聘，登录态会自动检测；改完点「保存配置」，再点「开始投递」。未保存的修改会拦住任务，避免用旧关键词跑一轮。</p>
+            <p>图片简历、AI 打招呼语和回复追踪都在这页配置；工作形式、全局城市与黑名单在「设置中心」统一维护。</p>
+          </PlatformTip>
 
           {/* 投递行为 */}
           <Card className="animate-in fade-in slide-in-from-bottom-5 duration-700">
@@ -730,7 +704,7 @@ export default function BossPage() {
                 <BiImage className="text-primary" />
                 投递行为
               </CardTitle>
-              <CardDescription>设置打招呼语、重复沟通与图片简历发送行为，保存后在下次启动投递时生效</CardDescription>
+              <CardDescription>设置打招呼语、重复沟通与图片简历发送行为，保存后在下次启动投递时生效。</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
@@ -744,13 +718,13 @@ export default function BossPage() {
                     placeholder="请输入你的自我介绍和求职意向"
                     className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm leading-7 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   />
-                  <p className="text-sm text-muted-foreground">用于首次沟通的默认打招呼语；启用 AI 时优先使用 AI 生成内容，未生成有效内容时使用此文本。重复沟通仍使用下方的逐行随机消息。修改后点击“保存配置”，下次启动投递生效。</p>
+                  <p className="text-sm text-muted-foreground">用于首次沟通的默认打招呼语；启用 AI 时优先使用 AI 生成内容，未生成有效内容时使用此文本。重复沟通仍使用下方的逐行随机消息。修改后点击「保存配置」，下次启动投递生效。</p>
                 </div>
                 <div className="flex flex-col gap-4 rounded-lg border bg-muted/20 p-4 sm:flex-row sm:items-center sm:justify-between">
                   <div className="space-y-1">
                     <Label htmlFor="allowRepeatChat" className="text-base font-medium">向已沟通 Boss 再次发送消息</Label>
                     <p className="text-sm text-muted-foreground">
-                      开启后，遇到“继续沟通”会随机发送下方一行消息；关闭时跳过该岗位。首次沟通仍使用 AI 或默认打招呼语。
+                      开启后，遇到「继续沟通」会随机发送下方一行消息；关闭时跳过该岗位。首次沟通仍使用 AI 或默认打招呼语。
                     </p>
                   </div>
                   <button
@@ -1034,147 +1008,27 @@ export default function BossPage() {
           </CardContent>
         </Card>
 
-        {/* 黑名单管理 */}
+        {/* 黑名单统一在「设置中心 → 全局规则」维护。
+            这里原先有一套完整的内嵌增删改界面，和设置中心操作的是同一张表，
+            两处都能改容易让人不知道哪份生效，因此改为单一入口。 */}
         <Card className="animate-in fade-in slide-in-from-bottom-8 duration-700">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <BiSearch className="text-primary" />
-              黑名单管理 ({blacklist.length} 条)
+              黑名单
             </CardTitle>
-            <CardDescription>添加或删除不想投递的公司、职位或HR</CardDescription>
+            <CardDescription>所有平台共用这一份，命中即跳过，不占用投递额度。</CardDescription>
           </CardHeader>
-          <CardContent>
-            <div className="space-y-6">
-              {/* 添加黑名单 */}
-              <div className="flex gap-2">
-                <Select
-                  value={blacklistType}
-                  onChange={(e) => setBlacklistType(e.target.value)}
-                  className="w-32"
-                >
-                  <option value="company">公司</option>
-                  <option value="job">岗位</option>
-                  <option value="recruiter">HR</option>
-                </Select>
-                <Input
-                  value={newBlacklistKeyword}
-                  onChange={(e) => setNewBlacklistKeyword(e.target.value)}
-                  placeholder={`输入${blacklistType === 'company' ? '公司名称' : blacklistType === 'job' ? '岗位关键词' : 'HR职位'}关键词`}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      handleAddBlacklist()
-                    }
-                  }}
-                />
-                <Button onClick={handleAddBlacklist} className="whitespace-nowrap">
-                  <BiPlus />
-                  添加
-                </Button>
-              </div>
-
-              {/* 黑名单列表 - 按类型分组显示 */}
-              <div className="space-y-6">
-                {/* 公司黑名单 */}
-                <div>
-                  <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
-                    <BiBuilding className="text-orange-500" />
-                    <span>公司黑名单 ({blacklist.filter(item => item.type === 'company').length})</span>
-                  </h3>
-                  <div className="space-y-2">
-                    {blacklist.filter(item => item.type === 'company').length === 0 ? (
-                      <div className="text-center py-4 text-muted-foreground bg-muted/30 rounded-lg">
-                        <p className="text-xs">暂无公司黑名单</p>
-                      </div>
-                    ) : (
-                      blacklist.filter(item => item.type === 'company').map((item) => (
-                        <div
-                          key={item.id}
-                          className="flex items-center justify-between p-3 bg-orange-50 dark:bg-orange-950/20 rounded-lg border border-orange-200 dark:border-orange-800"
-                        >
-                          <span className="text-sm">{item.value}</span>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleDeleteBlacklist(item.id)}
-                            className="text-red-500 hover:text-red-700 hover:bg-red-50"
-                          >
-                            <BiTrash />
-                          </Button>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-
-                {/* 岗位黑名单 */}
-                <div>
-                  <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
-                    <BiBriefcase className="text-blue-500" />
-                    <span>岗位黑名单 ({blacklist.filter(item => item.type === 'job').length})</span>
-                  </h3>
-                  <div className="space-y-2">
-                    {blacklist.filter(item => item.type === 'job').length === 0 ? (
-                      <div className="text-center py-4 text-muted-foreground bg-muted/30 rounded-lg">
-                        <p className="text-xs">暂无岗位黑名单</p>
-                      </div>
-                    ) : (
-                      blacklist.filter(item => item.type === 'job').map((item) => (
-                        <div
-                          key={item.id}
-                          className="flex items-center justify-between p-3 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-800"
-                        >
-                          <span className="text-sm">{item.value}</span>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleDeleteBlacklist(item.id)}
-                            className="text-red-500 hover:text-red-700 hover:bg-red-50"
-                          >
-                            <BiTrash />
-                          </Button>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-
-                {/* HR黑名单 */}
-                <div>
-                  <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
-                    <BiSearch className="text-green-500" />
-                    <span>HR黑名单 ({blacklist.filter(item => item.type === 'recruiter').length})</span>
-                  </h3>
-                  <div className="space-y-2">
-                    {blacklist.filter(item => item.type === 'recruiter').length === 0 ? (
-                      <div className="text-center py-4 text-muted-foreground bg-muted/30 rounded-lg">
-                        <p className="text-xs">暂无HR黑名单</p>
-                      </div>
-                    ) : (
-                      blacklist.filter(item => item.type === 'recruiter').map((item) => (
-                        <div
-                          key={item.id}
-                          className="flex items-center justify-between p-3 bg-green-50 dark:bg-green-950/20 rounded-lg border border-green-200 dark:border-green-800"
-                        >
-                          <span className="text-sm">{item.value}</span>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleDeleteBlacklist(item.id)}
-                            className="text-red-500 hover:text-red-700 hover:bg-red-50"
-                          >
-                            <BiTrash />
-                          </Button>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
+          <CardContent className="space-y-2">
+            <p className="text-sm text-muted-foreground">
+              当前共 {blacklist.length} 条。统一在「设置中心 → 全局规则」维护，Boss 投递中自动拉黑的公司也会出现在那里。
+            </p>
+            <Link href="/settings?tab=rules" className="inline-block text-sm font-medium text-primary underline underline-offset-4">
+              去「设置中心 → 全局规则」管理 →
+            </Link>
           </CardContent>
         </Card>
 
-        
         </TabsContent>
 
         <TabsContent value="analytics" className="space-y-6 mt-6">

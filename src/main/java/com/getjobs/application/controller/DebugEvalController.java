@@ -4,6 +4,7 @@ import com.getjobs.worker.manager.PlaywrightManager;
 import com.microsoft.playwright.Page;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Profile;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
@@ -15,6 +16,7 @@ import java.util.Map;
  */
 @Slf4j
 @RestController
+@Profile("dev")
 @RequestMapping("/api/debug")
 @CrossOrigin(origins = "*")
 public class DebugEvalController {

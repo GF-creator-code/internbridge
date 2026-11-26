@@ -4,6 +4,7 @@ import com.getjobs.application.entity.CookieEntity;
 import com.getjobs.application.entity.LiepinConfigEntity;
 import com.getjobs.application.entity.LiepinOptionEntity;
 import com.getjobs.application.service.CookieService;
+import com.getjobs.application.service.TaskProgressBroadcaster;
 import com.getjobs.application.service.LiepinService;
 import com.getjobs.worker.manager.PlaywrightManager;
 import com.getjobs.worker.service.LiepinJobService;
@@ -39,6 +40,9 @@ public class LiepinController {
 
     @Autowired
     private LiepinService liepinService;
+
+    @Autowired
+    private TaskProgressBroadcaster taskProgressBroadcaster;
 
     /**
      * 检查登录状态
@@ -92,6 +96,7 @@ public class LiepinController {
             CompletableFuture.runAsync(() -> {
                 liepinJobService.executeDelivery(progressMessage -> {
                     log.info("[{}] {}", progressMessage.getPlatform(), progressMessage.getMessage());
+                    taskProgressBroadcaster.broadcast(progressMessage);
                 });
             });
 

@@ -60,6 +60,10 @@ public class ConfigController {
             var config = configService.getConfigByKey(key);
 
             if (config != null) {
+                // 凭据类配置不回传明文，与列表接口保持一致
+                if (ConfigService.isSecretKey(key)) {
+                    config.setConfigValue(ConfigService.maskSecret(config.getConfigValue()));
+                }
                 response.put("success", true);
                 response.put("data", config);
                 response.put("message", "获取配置成功");
@@ -131,6 +135,14 @@ public class ConfigController {
                 response.put("success", false);
                 response.put("message", "配置值不能为空");
                 return ResponseEntity.badRequest().body(response);
+            }
+
+            // 掩码不是真实值。收到掩码说明前端只是回显了已保存的凭据，
+            // 这时必须保持原值不动，否则会把 "••••1234" 当成密钥写进库。
+            if (ConfigService.isSecretKey(key) && ConfigService.isMaskedValue(value)) {
+                response.put("success", true);
+                response.put("message", "配置更新成功（凭据未修改）");
+                return ResponseEntity.ok(response);
             }
 
             boolean success = configService.updateConfig(key, value);

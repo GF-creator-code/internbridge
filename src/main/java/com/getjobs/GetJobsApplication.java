@@ -6,11 +6,10 @@ import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
 /**
- * GetJobs应用程序启动类
- * 自动化求职平台的主入口
+ * InternBridge 应用程序启动类
+ * 本地运行的跨平台实习投递管理端主入口
  *
- * @author GetJobs
- * @version 0.0.1-SNAPSHOT
+ * 注：类名沿用历史命名，改动会牵连构建配置与启动脚本，故保留。
  */
 @SpringBootApplication(scanBasePackages = "com.getjobs")
 @EnableScheduling

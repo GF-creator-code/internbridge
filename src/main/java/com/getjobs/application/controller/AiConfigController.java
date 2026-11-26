@@ -85,45 +85,4 @@ public class AiConfigController {
         }
     }
 
-    /**
-     * 健康检查接口
-     * @return 服务状态
-     */
-    @GetMapping("/health")
-    public ResponseEntity<Map<String, Object>> healthCheck() {
-        Map<String, Object> response = new HashMap<>();
-        response.put("success", true);
-        response.put("service", "AiConfigController");
-        response.put("status", "healthy");
-        response.put("timestamp", System.currentTimeMillis());
-
-        return ResponseEntity.ok(response);
-    }
-
-    /**
-     * AI 文本生成测试接口（GET）
-     * 示例：/api/ai/chat?content=你好，帮我写一句简洁的问候语
-     */
-    @GetMapping("/chat")
-    public ResponseEntity<Map<String, Object>> chat(@RequestParam(name = "content") String content) {
-        Map<String, Object> response = new HashMap<>();
-        try {
-            if (content == null || content.trim().isEmpty()) {
-                response.put("success", false);
-                response.put("message", "content 参数不能为空");
-                return ResponseEntity.badRequest().body(response);
-            }
-
-            String reply = aiService.sendRequest(content.trim());
-            response.put("success", true);
-            response.put("data", reply);
-            response.put("message", "AI 请求成功");
-            return ResponseEntity.ok(response);
-        } catch (Exception e) {
-            log.error("AI 请求失败", e);
-            response.put("success", false);
-            response.put("message", e.getMessage());
-            return ResponseEntity.internalServerError().body(response);
-        }
-    }
 }

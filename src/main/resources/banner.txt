@@ -5,4 +5,4 @@ ${AnsiColor.BRIGHT_CYAN}/ /_/ /  __/ /_   / /_/ / /_/ / /_/ (__  )
 ${AnsiColor.BRIGHT_BLUE}\____/\___/\__/   \____/\____/_.___/____/
 ${AnsiColor.DEFAULT}
 ${AnsiStyle.BOLD}${AnsiColor.BRIGHT_GREEN}Spring Boot: ${spring-boot.formatted-version}${AnsiStyle.NORMAL}${AnsiColor.DEFAULT}
-${AnsiColor.BRIGHT_RED}${AnsiStyle.BOLD}Create By Github@loks666.${AnsiStyle.NORMAL}${AnsiColor.DEFAULT}
+${AnsiColor.BRIGHT_RED}${AnsiStyle.BOLD}InternBridge - 本地实习投递管理端${AnsiStyle.NORMAL}${AnsiColor.DEFAULT}

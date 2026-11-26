@@ -9,9 +9,16 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select } from '@/components/ui/select'
 import PageHeader from '@/app/components/PageHeader'
+import PlatformTip from '@/app/components/PlatformTip'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import AnalysisContent from '@/app/51job/analysis/AnalysisContent'
 import { API_BASE } from '@/lib/api'
+import { parseKeywordsForDisplay, serializeKeywords, parseSingleKeyword, parseKeywordArray } from '@/lib/keywords'
+import FeedbackBar from '@/app/components/FeedbackBar'
+import ConfigLoadError from '@/app/components/ConfigLoadError'
+import { useTaskControl } from '@/lib/useTaskControl'
+import { useTaskProgress } from '@/lib/useTaskProgress'
+import TaskProgressPanel from '@/app/components/TaskProgressPanel'
 
 interface Job51Config {
   id?: number
@@ -29,7 +36,10 @@ const MAX_SALARY_SELECTIONS = 5
 export default function Job51Page() {
   const API = process.env.API_BASE_URL || `${API_BASE}`
   const [isLoggedIn, setIsLoggedIn] = useState(false)
-  const [isDelivering, setIsDelivering] = useState(false)
+  // 投递任务的启停与失败反馈统一由 useTaskControl 提供
+  const task = useTaskControl(API_BASE)
+  const isDelivering = task.isRunning
+  const progress = useTaskProgress('51job')
   const [checkingLogin, setCheckingLogin] = useState(true)
   const [showLogoutDialog, setShowLogoutDialog] = useState(false)
   const [showSaveDialog, setShowSaveDialog] = useState(false)
@@ -40,7 +50,14 @@ export default function Job51Page() {
   const [config, setConfig] = useState<Job51Config>({ keywords: '', jobArea: '', salary: '' })
   const [options, setOptions] = useState<Job51Options>({ jobArea: [], salary: [] })
   const [loadingConfig, setLoadingConfig] = useState(true)
-  const [isCustomArea, setIsCustomArea] = useState(false)
+  // 配置加载失败要显式告诉用户，否则空表单会被误当成真实配置
+  const [configLoadError, setConfigLoadError] = useState(false)
+  // 保存前的配置快照。用来判断「改了但没保存」——
+  // 原先六个平台都没有这个判断，用户改了关键词直接点开始投递，
+  // 跑的还是旧配置，而且界面完全看不出来。
+  const [savedConfig, setSavedConfig] = useState<Job51Config | null>(null)
+  const dirty = savedConfig !== null && (Object.keys(config) as (keyof Job51Config)[])
+    .some(key => savedConfig[key] !== config[key])
   const [backendAvailable, setBackendAvailable] = useState(false)
   const [cookieSavedAfterLogin, setCookieSavedAfterLogin] = useState(false)
   // 薪资多选状态：存储选中的code数组
@@ -70,6 +87,23 @@ export default function Job51Page() {
       onError: (e, attempt, delay) => {
         console.warn(`[51job SSE] 连接错误，准备第${attempt}次重连，延迟 ${delay}ms`, e)
         setCheckingLogin(false)
+      },
+      // 断线重连后补一次登录态拉取。SSE 断开期间服务端推的状态变化已经丢了，
+      // 只依赖推送的话，页面会永远停在「请先登录」——而用户其实早就登录了。
+      onReconnect: () => {
+        void (async () => {
+          try {
+            const res = await fetch(`${API_BASE}/api/51job/login-status`)
+            if (!res.ok) return
+            const data = await res.json()
+            if (typeof data.isLoggedIn === 'boolean') {
+              setIsLoggedIn(data.isLoggedIn)
+              setCheckingLogin(false)
+            }
+          } catch {
+            // 补偿拉取失败不影响后续重连
+          }
+        })()
       },
       listeners: [
         {
@@ -141,76 +175,12 @@ export default function Job51Page() {
     }
   }, [salaryDropdownOpen])
 
-  // 解析/序列化关键词（与猎聘保持一致）
-  const parseKeywordsFromDb = (raw?: string): string => {
-    if (!raw) return ''
-    const t = raw.trim()
-    if (t.startsWith('[') && t.endsWith(']')) {
-      try {
-        const arr = JSON.parse(t)
-        if (Array.isArray(arr)) return arr.filter(Boolean).join(', ')
-      } catch (e) {
-        console.warn('[51job] 解析关键词JSON失败，使用原值:', e)
-      }
-    }
-    return t.replace(/，/g, ',')
-  }
-
-  const serializeKeywordsForDb = (display?: string): string => {
-    const raw = (display || '').trim()
-    if (!raw) return '[]'
-    const norm = raw.replace(/，/g, ',')
-    const tokens = norm
-      .split(',')
-      .map((s) => s.trim())
-      .filter((s) => s.length > 0)
-    return JSON.stringify(tokens)
-  }
-
-  // 解析后端存储的列表字符串，返回第一个元素（用于单选）
-  const parseSingleTokenFromDb = (raw?: string): string => {
-    if (!raw) return ''
-    const t = raw.trim()
-    if (t.startsWith('[') && t.endsWith(']')) {
-      try {
-        const arr = JSON.parse(t)
-        if (Array.isArray(arr) && arr.length > 0) {
-          return String(arr[0] ?? '').trim()
-        }
-      } catch (_) {
-        // ignore, fall through
-      }
-    }
-    // 非 JSON 数组时，按逗号拆分，取第一个
-    const parts = t.replace(/，/g, ',').split(',').map((s) => s.trim()).filter(Boolean)
-    return parts[0] || ''
-  }
-
-  // 解析后端存储的薪资列表（多选）
-  const parseMultiTokensFromDb = (raw?: string): string[] => {
-    if (!raw) return []
-    const t = raw.trim()
-    if (t.startsWith('[') && t.endsWith(']')) {
-      try {
-        const arr = JSON.parse(t)
-        if (Array.isArray(arr)) {
-          return arr.map(v => String(v ?? '').trim()).filter(Boolean)
-        }
-      } catch (_) {
-        // ignore, fall through
-      }
-    }
-    // 非 JSON 数组时，按逗号拆分
-    return t.replace(/，/g, ',').split(',').map((s) => s.trim()).filter(Boolean)
-  }
-
   const fetchAllData = async () => {
     try {
       const res = await fetch(`${API}/api/51job/config`)
       if (!res.ok) {
         console.warn(`[51job] 获取配置失败: ${res.status}`)
-        setConfig({ keywords: '', jobArea: '', salary: '' })
-        setOptions({ jobArea: [], salary: [] })
+        setConfigLoadError(true)
         return
       }
       const data = await res.json()
@@ -219,11 +189,11 @@ export default function Job51Page() {
         const conf: Job51Config = data.config || { keywords: '', jobArea: '', salary: '' }
 
         // 关键词标准化（展示用）
-        const normalizedKeywords = parseKeywordsFromDb(conf.keywords)
+        const normalizedKeywords = parseKeywordsForDisplay(conf.keywords)
 
         // 从服务端字段提取第一个token，然后映射到code
-        const rawArea = parseSingleTokenFromDb(conf.jobArea)
-        const rawSalaries = parseMultiTokensFromDb(conf.salary) // 薪资支持多个
+        const rawArea = parseSingleKeyword(conf.jobArea)
+        const rawSalaries = parseKeywordArray(conf.salary) // 薪资支持多个
 
         const areaList = opts.jobArea || []
         const salaryList = opts.salary || []
@@ -242,9 +212,10 @@ export default function Job51Page() {
         const areaCode = matchArea?.code || (areaList.find((o) => o.name === '不限')?.code || areaList.find((o) => o.code === '0')?.code || '')
 
         setOptions(opts)
-        setConfig({ ...conf, keywords: normalizedKeywords, jobArea: areaCode, salary: JSON.stringify(salaryCodes) })
+        const normalizedConf = { ...conf, keywords: normalizedKeywords, jobArea: areaCode, salary: JSON.stringify(salaryCodes) }
+        setConfig(normalizedConf)
+        setSavedConfig(normalizedConf)
         setSelectedSalaries(salaryCodes)
-        setIsCustomArea(false)
       }
     } catch (e) {
       console.warn('[51job] 获取配置异常（可能后端未启动）:', e)
@@ -272,48 +243,18 @@ export default function Job51Page() {
     })()
   }, [])
 
+  // 启动/停止的统一调用与失败反馈见 lib/useTaskControl。
   const handleStartDelivery = async () => {
-    try {
-      setIsDelivering(true)
-      const response = await fetch(`${API}/api/51job/start`, { method: 'POST' })
-      const data = await response.json()
-      if (!data.success) {
-        console.warn('[51job] 启动失败：', data.message)
-        setIsDelivering(false)
-      }
-    } catch (error) {
-      console.error('[51job] 启动投递失败：', error)
-      setIsDelivering(false)
+    // 有未保存的修改时拦一道：不然跑的是旧配置，而用户以为改了就是改了
+    if (dirty) {
+      task.report({ kind: 'error', title: '请先保存配置', message: '当前配置有尚未保存的修改，直接开始投递会使用上一次保存的关键词和城市。' })
+      return
     }
+    await task.start('51job')
   }
 
   const handleStopDelivery = async () => {
-    try {
-      const response = await fetch(`${API}/api/51job/stop`, { method: 'POST' })
-      if (!response.ok) {
-        // 后端返回错误状态码，恢复按钮
-        console.warn('[51job] 停止投递请求失败，状态码:', response.status)
-        setIsDelivering(false)
-        return
-      }
-      
-      const data = await response.json()
-      console.log('[51job] 停止投递响应:', data)
-      
-      // 根据后端返回结果切换按钮状态
-      if (data.success) {
-        // 停止成功，恢复按钮
-        setIsDelivering(false)
-      } else {
-        // 停止失败（可能任务未运行），也恢复按钮
-        console.warn('[51job] 停止投递失败:', data.message)
-        setIsDelivering(false)
-      }
-    } catch (error) {
-      // 网络异常或后端未启动，恢复按钮状态
-      console.error('[51job] 停止投递请求异常:', error)
-      setIsDelivering(false)
-    }
+    await task.stop('51job')
   }
 
   const triggerLogout = async () => {
@@ -367,7 +308,7 @@ export default function Job51Page() {
       }
       const payload = {
         ...config,
-        keywords: serializeKeywordsForDb(config.keywords),
+        keywords: serializeKeywords(config.keywords),
         jobArea: toBracketListString(config.jobArea, 'jobArea'),
         salary: toBracketListString(config.salary, 'salary'),
       }
@@ -384,7 +325,7 @@ export default function Job51Page() {
           console.warn('[51job] 保存 Cookie 失败:', e)
         }
         await fetchAllData()
-        setSaveResult({ success: true, message: '保存成功，配置与Cookie已更新。' })
+        setSaveResult({ success: true, message: '保存成功，配置与Cookie已更新。新配置在下次启动投递任务时生效。' })
       } else {
         setSaveResult({ success: false, message: '保存失败：后端返回异常状态。' })
       }
@@ -400,8 +341,8 @@ export default function Job51Page() {
     <div className="space-y-6">
       <PageHeader
         icon={<BiBriefcase className="text-2xl" />}
-        title="51job配置"
-        subtitle="配置51job平台的求职参数"
+        title="51job"
+        subtitle="按关键词与城市筛选岗位，登录后启动自动投递。"
         iconClass="text-white"
         accentBgClass="bg-blue-500"
         actions={
@@ -432,6 +373,22 @@ export default function Job51Page() {
           </div>
         }
       />
+      <FeedbackBar feedback={task.feedback} onDismiss={task.clearFeedback} />
+      {dirty && (
+        <p role="status" className="text-sm text-amber-600 dark:text-amber-400">
+          有尚未保存的配置修改。请先点「保存配置」，再开始投递任务，否则会使用上一次保存的设置。
+        </p>
+      )}
+      {configLoadError && (
+        <ConfigLoadError onRetry={() => { setConfigLoadError(false); void fetchAllData() }} />
+      )}
+      <TaskProgressPanel
+        latest={progress.latest}
+        history={progress.history}
+        connected={progress.connected}
+        isRunning={isDelivering}
+        onClear={progress.clear}
+      />
 
       <Tabs defaultValue="config" className="w-full">
         <TabsList className="grid w-full grid-cols-2">
@@ -440,22 +397,10 @@ export default function Job51Page() {
         </TabsList>
 
         <TabsContent value="config" className="space-y-6 mt-6">
-          {/* 平台说明 */}
-          <Card className="animate-in fade-in slide-in-from-bottom-5 duration-700">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <BiBriefcase className="text-primary" />
-                51job 平台说明
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <p className="text-sm text-muted-foreground">请在浏览器标签页中登录 51job 平台，登录成功后系统会自动检测登录状态。</p>
-                <p className="text-sm text-muted-foreground">登录成功后，点击“开始投递”按钮启动自动投递任务。</p>
-                <p className="text-sm text-muted-foreground">点击“保存配置”按钮可手动保存当前登录相关信息到数据库。</p>
-              </div>
-            </CardContent>
-          </Card>
+          <PlatformTip>
+            <p>先在浏览器标签页登录 51job，登录态会自动检测；改完点「保存配置」，再点「开始投递」。</p>
+            <p>该站验证码较频繁，投递间隔已在配置中留有余量，运行过程请耐心等待。</p>
+          </PlatformTip>
 
           {/* 配置表单 */}
           <Card className="animate-in fade-in slide-in-from-bottom-5 duration-700">
@@ -479,40 +424,21 @@ export default function Job51Page() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <Label>城市区域</Label>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setIsCustomArea(!isCustomArea)
-                          if (!isCustomArea) setConfig((c) => ({ ...c, jobArea: '' }))
-                        }}
-                        className="text-xs text-primary hover:underline"
-                      >
-                        {isCustomArea ? '从列表选择' : '手动输入'}
-                      </button>
-                    </div>
-                    {isCustomArea ? (
-                      <Input
-                        placeholder="请输入城市码，例如：410"
-                        value={config.jobArea || ''}
-                        onChange={(e) => setConfig((c) => ({ ...c, jobArea: e.target.value }))}
-                      />
-                    ) : (
-                      <Select
-                        value={config.jobArea || ''}
-                        onChange={(e) => setConfig((c) => ({ ...c, jobArea: e.target.value }))}
-                        placeholder="请选择城市"
-                      >
-                        <option value="">请选择城市</option>
-                        {options.jobArea.map((o) => (
-                          <option key={o.code} value={o.code}>{o.name}</option>
-                        ))}
-                      </Select>
-                    )}
-                    <p className="text-xs text-muted-foreground">
-                      {isCustomArea ? '手动输入城市码（例如：410代表北京）' : '从列表选择城市，或点击"手动输入"自定义'}
-                    </p>
+                    <Label htmlFor="jobArea">城市区域</Label>
+                    <Select
+                      id="jobArea"
+                      value={config.jobArea || ''}
+                      onChange={(e) => setConfig((c) => ({ ...c, jobArea: e.target.value }))}
+                    >
+                      <option value="">请选择城市</option>
+                      {options.jobArea.map((o) => (
+                        <option key={o.code} value={o.code}>{o.name}</option>
+                      ))}
+                      {config.jobArea && !options.jobArea.some((o) => o.code === config.jobArea) && (
+                        <option value={config.jobArea}>{config.jobArea}（当前配置）</option>
+                      )}
+                    </Select>
+                    <p className="text-xs text-muted-foreground">从列表选择城市区域；已有配置不在列表中时会显示为「当前配置」。</p>
                   </div>
                   <div className="space-y-2">
                     <Label>薪资范围（最多选择5个）</Label>

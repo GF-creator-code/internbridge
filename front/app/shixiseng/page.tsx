@@ -11,8 +11,16 @@ import { Select } from '@/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import AnalysisContent from '@/app/shixiseng/analysis/AnalysisContent'
 import PageHeader from '@/app/components/PageHeader'
+import PlatformTip from '@/app/components/PlatformTip'
 import KeywordListsField, { parseKeywordList, serializeKeywordList } from '@/app/components/KeywordListsField'
 import { API_BASE } from '@/lib/api'
+import { parseKeywordsForDisplay, serializeKeywords } from '@/lib/keywords'
+import { useProfileOptions } from '@/lib/useProfileOptions'
+import FeedbackBar from '@/app/components/FeedbackBar'
+import ConfigLoadError from '@/app/components/ConfigLoadError'
+import { useTaskControl } from '@/lib/useTaskControl'
+import { useTaskProgress } from '@/lib/useTaskProgress'
+import TaskProgressPanel from '@/app/components/TaskProgressPanel'
 
 interface ShixisengConfig {
   id?: number
@@ -28,7 +36,10 @@ interface ShixisengConfig {
 
 export default function ZhilianPage() {
   const [isLoggedIn, setIsLoggedIn] = useState(false)
-  const [isDelivering, setIsDelivering] = useState(false)
+  // 投递任务的启停与失败反馈统一由 useTaskControl 提供
+  const task = useTaskControl(API_BASE)
+  const isDelivering = task.isRunning
+  const progress = useTaskProgress('shixiseng')
   const [checkingLogin, setCheckingLogin] = useState(true)
   const [showLogoutDialog, setShowLogoutDialog] = useState(false)
   const [showSaveDialog, setShowSaveDialog] = useState(false)
@@ -40,6 +51,15 @@ export default function ZhilianPage() {
   const [config, setConfig] = useState<ShixisengConfig>({ keywords: '', city: '', includeKeywords: '', excludeKeywords: '', waitTime: 2 })
   const [options] = useState<{ city: {code:string;name:string}[] }>({ city: [] })
   const [loadingConfig, setLoadingConfig] = useState(true)
+  // 配置加载失败要显式告诉用户，否则空表单会被误当成真实配置
+  const [configLoadError, setConfigLoadError] = useState(false)
+  const cityOptions = useProfileOptions().city
+  // 保存前的配置快照。用来判断「改了但没保存」——
+  // 原先六个平台都没有这个判断，用户改了关键词直接点开始投递，
+  // 跑的还是旧配置，而且界面完全看不出来。
+  const [savedConfig, setSavedConfig] = useState<ShixisengConfig | null>(null)
+  const dirty = savedConfig !== null && (Object.keys(config) as (keyof ShixisengConfig)[])
+    .some(key => savedConfig[key] !== config[key])
 
   useEffect(() => {
     if (typeof window === 'undefined' || typeof EventSource === 'undefined') {
@@ -53,6 +73,23 @@ export default function ZhilianPage() {
       onError: (e, attempt, delay) => {
         console.warn(`[实习僧 SSE] 连接错误，第${attempt}次重连，延迟 ${delay}ms`, e)
         setCheckingLogin(false)
+      },
+      // 断线重连后补一次登录态拉取。SSE 断开期间服务端推的状态变化已经丢了，
+      // 只依赖推送的话，页面会永远停在「请先登录」——而用户其实早就登录了。
+      onReconnect: () => {
+        void (async () => {
+          try {
+            const res = await fetch(`${API_BASE}/api/shixiseng/login-status`)
+            if (!res.ok) return
+            const data = await res.json()
+            if (typeof data.isLoggedIn === 'boolean') {
+              setIsLoggedIn(data.isLoggedIn)
+              setCheckingLogin(false)
+            }
+          } catch {
+            // 补偿拉取失败不影响后续重连
+          }
+        })()
       },
       listeners: [
         {
@@ -93,46 +130,23 @@ export default function ZhilianPage() {
   }, [])
 
   // 与猎聘一致的关键词解析/序列化
-  const parseKeywordsFromDb = (raw?: string): string => {
-    if (!raw) return ''
-    const t = raw.trim()
-    if (t.startsWith('[') && t.endsWith(']')) {
-      try {
-        const arr = JSON.parse(t)
-        if (Array.isArray(arr)) return arr.filter(Boolean).join(', ')
-      } catch (e) {
-        console.warn('[实习僧] 解析关键词JSON失败，使用原值:', e)
-      }
-    }
-    return t.replace(/，/g, ',')
-  }
-
-  const serializeKeywordsForDb = (display?: string): string => {
-    const raw = (display || '').trim()
-    if (!raw) return '[]'
-    const norm = raw.replace(/，/g, ',')
-    const tokens = norm
-      .split(',')
-      .map((s) => s.trim())
-      .filter((s) => s.length > 0)
-    return JSON.stringify(tokens)
-  }
-
   const fetchAllData = async () => {
     try {
       const res = await fetch(`${API_BASE}/api/shixiseng/config`)
       const data = await res.json()
       if (data.config) {
         const normalized = { ...data.config }
-        normalized.keywords = parseKeywordsFromDb(data.config.keywords)
+        normalized.keywords = parseKeywordsForDisplay(data.config.keywords)
         normalized.includeKeywords = parseKeywordList(data.config.includeKeywords)
         normalized.excludeKeywords = parseKeywordList(data.config.excludeKeywords)
         normalized.waitTime = Number(data.config.waitTime) > 0 ? Number(data.config.waitTime) : 2
         setConfig(normalized)
+        setSavedConfig(normalized)
       }
       // 实习僧城市为自由文本输入，无下拉选项
     } catch (e) {
       console.error('[实习僧] 获取配置失败:', e)
+      setConfigLoadError(true)
     } finally {
       setLoadingConfig(false)
     }
@@ -160,23 +174,19 @@ export default function ZhilianPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // 启动/停止的统一调用与失败反馈见 lib/useTaskControl。
+  // 原先这里把后端返回的中文原因丢进了 console，界面上什么都不显示。
   const handleStartDelivery = async () => {
-    try {
-      setIsDelivering(true)
-      const response = await fetch(`${API_BASE}/api/shixiseng/start`, { method: 'POST' })
-      const data = await response.json()
-      if (!data.success) setIsDelivering(false)
-    } catch (error) {
-      setIsDelivering(false)
+    // 有未保存的修改时拦一道：不然跑的是旧配置，而用户以为改了就是改了
+    if (dirty) {
+      task.report({ kind: 'error', title: '请先保存配置', message: '当前配置有尚未保存的修改，直接开始投递会使用上一次保存的关键词和城市。' })
+      return
     }
+    await task.start('shixiseng')
   }
 
   const handleStopDelivery = async () => {
-    try {
-      const response = await fetch(`${API_BASE}/api/shixiseng/stop`, { method: 'POST' })
-      const data = await response.json()
-      if (data.success) setIsDelivering(false)
-    } catch (error) {}
+    await task.stop('shixiseng')
   }
 
   const triggerLogout = async () => {
@@ -208,7 +218,7 @@ export default function ZhilianPage() {
     try {
       const payload = {
         ...config,
-        keywords: serializeKeywordsForDb(config.keywords),
+        keywords: serializeKeywords(config.keywords),
         includeKeywords: serializeKeywordList(config.includeKeywords),
         excludeKeywords: serializeKeywordList(config.excludeKeywords),
       }
@@ -220,7 +230,7 @@ export default function ZhilianPage() {
       if (response.ok) {
         try { await fetch(`${API_BASE}/api/cookie/save?platform=shixiseng`, { method: 'POST' }) } catch {}
         await fetchAllData()
-        setSaveResult({ success: true, message: '保存成功，配置已更新。' })
+        setSaveResult({ success: true, message: '保存成功，配置已更新。新配置在下次启动投递任务时生效。' })
       } else {
         setSaveResult({ success: false, message: '保存失败：后端返回异常状态。' })
       }
@@ -236,8 +246,8 @@ export default function ZhilianPage() {
     <div className="space-y-6">
       <PageHeader
         icon={<BiBriefcase className="text-2xl" />}
-        title="实习僧配置"
-        subtitle="配置实习僧平台的求职参数"
+        title="实习僧"
+        subtitle="整站均为实习岗，按关键词筛选后自动投递。"
         iconClass="text-white"
         accentBgClass="bg-purple-500"
         actions={
@@ -268,6 +278,22 @@ export default function ZhilianPage() {
           </div>
         }
       />
+      <FeedbackBar feedback={task.feedback} onDismiss={task.clearFeedback} />
+      {dirty && (
+        <p role="status" className="text-sm text-amber-600 dark:text-amber-400">
+          有尚未保存的配置修改。请先点「保存配置」，再开始投递任务，否则会使用上一次保存的设置。
+        </p>
+      )}
+      {configLoadError && (
+        <ConfigLoadError onRetry={() => { setConfigLoadError(false); void fetchAllData() }} />
+      )}
+      <TaskProgressPanel
+        latest={progress.latest}
+        history={progress.history}
+        connected={progress.connected}
+        isRunning={isDelivering}
+        onClear={progress.clear}
+      />
 
       <Tabs defaultValue="config" className="w-full">
         <TabsList className="grid w-full grid-cols-2">
@@ -276,21 +302,10 @@ export default function ZhilianPage() {
         </TabsList>
 
         <TabsContent value="config" className="space-y-6 mt-6">
-          <Card className="animate-in fade-in slide-in-from-bottom-5 duration-700">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <BiBriefcase className="text-primary" />
-                实习僧平台说明
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <p className="text-sm text-muted-foreground">请在浏览器标签页中登录实习僧平台，登录成功后系统会自动检测登录状态。</p>
-                <p className="text-sm text-muted-foreground">登录成功后，点击"开始投递"按钮启动自动投递任务。</p>
-                <p className="text-sm text-muted-foreground">点击"保存配置"按钮可手动保存当前登录相关信息到数据库。</p>
-              </div>
-            </CardContent>
-          </Card>
+          <PlatformTip>
+            <p>先在浏览器标签页登录实习僧，登录态会自动检测；改完点「保存配置」，再点「开始投递」。</p>
+            <p>整站都是实习岗，通常不必再填「标题必含关键词」；投递前请在原站选好附件简历。</p>
+          </PlatformTip>
 
           {/* 配置表单 */}
           <Card className="animate-in fade-in slide-in-from-bottom-5 duration-700">
@@ -315,12 +330,12 @@ export default function ZhilianPage() {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label>城市</Label>
-                      <Input
-                        placeholder="如：北京"
-                        value={config.city || ''}
-                        onChange={(e) => setConfig((c) => ({ ...c, city: e.target.value }))}
-                      />
+                      <Label htmlFor="shixiseng-city">城市</Label>
+                      <Select id="shixiseng-city" value={config.city || ''}
+                        onChange={(e) => setConfig((c) => ({ ...c, city: e.target.value }))}>
+                        <option value="">不限</option>
+                        {cityOptions.map(city => <option key={city} value={city}>{city}</option>)}
+                      </Select>
                     </div>
                   </div>
                   <div className="space-y-3 rounded-lg border bg-muted/20 p-4">

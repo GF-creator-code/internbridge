@@ -3,6 +3,7 @@ package com.getjobs.application.controller;
 import com.getjobs.application.entity.CookieEntity;
 import com.getjobs.application.entity.ZhilianConfigEntity;
 import com.getjobs.application.service.CookieService;
+import com.getjobs.application.service.TaskProgressBroadcaster;
 import com.getjobs.application.service.ZhilianService;
 import com.getjobs.worker.manager.PlaywrightManager;
 import com.getjobs.worker.service.ZhilianJobService;
@@ -38,6 +39,9 @@ public class ZhilianController {
 
     @Autowired
     private ZhilianJobService zhilianJobService;
+
+    @Autowired
+    private TaskProgressBroadcaster taskProgressBroadcaster;
 
     // ==================== 配置管理相关接口 ====================
 
@@ -290,6 +294,7 @@ public class ZhilianController {
             CompletableFuture.runAsync(() -> {
                 zhilianJobService.executeDelivery(progressMessage -> {
                     log.info("[{}] {}", progressMessage.getPlatform(), progressMessage.getMessage());
+                    taskProgressBroadcaster.broadcast(progressMessage);
                 });
             });
 

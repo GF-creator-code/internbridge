@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.getjobs.application.entity.Job51ConfigEntity;
 import com.getjobs.application.entity.Job51Entity;
 import com.getjobs.application.entity.Job51OptionEntity;
+import com.getjobs.application.worker.ProfileApplier;
 import com.getjobs.application.mapper.Job51ConfigMapper;
 import com.getjobs.application.mapper.Job51Mapper;
 import com.getjobs.application.mapper.Job51OptionMapper;
@@ -26,6 +27,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class Job51Service {
     private final Job51ConfigMapper job51ConfigMapper;
+    private final ProfileApplier profileApplier;
     private final Job51OptionMapper job51OptionMapper;
     private final Job51Mapper job51Mapper;
     private final DataSource dataSource;
@@ -51,6 +53,7 @@ public class Job51Service {
 
         // 关键词解析
         config.setKeywords(parseListString(entity.getKeywords()));
+        config.setKeywords(profileApplier.applyKeywords(config.getKeywords()));
 
         // 城市区域：中文名或代码列表 -> 统一为代码列表（优先使用数据库映射）
         List<String> areaInputs = parseListString(entity.getJobArea());

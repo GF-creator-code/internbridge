@@ -3,9 +3,9 @@ layout: home
 # Public project homepage using the default VitePress home layout.
 
 hero:
-  name: "Get Jobs · Multi-Platform"
-  text: "香港与内地实习申请管理"
-  tagline: "整理简历技能，核对职位要求，查看各平台的岗位和投递记录。"
+  name: "InternBridge"
+  text: "香港与内地职位投递管理"
+  tagline: "一份求职档案管七个平台，统一查看采集、投递、进度与回复。"
   actions:
     - theme: brand
       text: 🚀 快速上手
@@ -15,9 +15,15 @@ hero:
       link: https://github.com/loks666/get_jobs
 
 features:
+  - icon: 🧭
+    title: 统一设置中心
+    details: 连接与通知、求职档案、全局规则、简历与匹配四个分区一次填完；每份数据只有一个编辑位置，不再多处重复填写。
+  - icon: 📊
+    title: 数据看板与每日日报
+    details: 跨平台汇总采集、投递、打招呼与回复，列出有回复的岗位；每天固定时段自动生成日报并推送。
   - icon: 🌐
     title: 七平台覆盖
-    details: Boss直聘、实习僧、智联招聘、猎聘、51job、JobsDB（香港）、OfferToday（香港），每平台独立配置页与投递分析看板。
+    details: Boss直聘、实习僧、智联招聘、猎聘、51job、JobsDB（香港）、OfferToday（香港），每平台独立配置页与投递分析标签页。
   - icon: 🚀
     title: 平台级并发
     details: 每平台独立 Playwright 实例 + 持久化浏览器 profile + 独立执行线程，多平台同时投递互不阻塞，Cookie 自动注入回写。
@@ -29,17 +35,17 @@ features:
     details: 用配置的模型提取简历原文依据，对照职位描述，保存技能介绍供平台投递使用。
   - icon: 🛡️
     title: 多层过滤闸
-    details: 黑名单（公司/职位/招聘者）、HR 活跃度、公司规模、实习岗限定、单关键词投递上限，层层把关。
+    details: 黑名单（公司/职位/招聘者）、HR 活跃度、公司规模、工作形式限定、单关键词投递上限，层层把关。
   - icon: 💾
     title: 本地数据持久化
-    details: 基于轻量级 SQLite 存储配置、登录态与投递记录，全部保留在本机；配置接口密码不回显。
+    details: 基于轻量级 SQLite 存储配置、登录态与投递记录，全部保留在本机；配置接口密钥不回显。
 ---
 
 ## 🖥️ 看得见的求职工作台
 
-从配置到岗位分析，再到投递日志，在网页端完成日常操作。
+从设置中心到平台投递，再到数据看板复盘，都在本机网页端完成。
 
-![Get Jobs 运行日志](/images/运行日志.png)
+![InternBridge 运行日志](/images/运行日志.png)
 
 [浏览全部界面截图 →](/guide/screenshots) · [了解完整功能 →](/guide/introduction)
 
@@ -57,8 +63,8 @@ cd internbridge
 powershell -File .\start-local.ps1
 ```
 
-进入 [本机管理端](http://127.0.0.1:9527/) 选择香港或内地平台。JobsDB 默认只采集，点岗位名称即可前往原站。要用简历试配一份职位描述，请先在「环境配置」连接模型。[完整安装与使用步骤](/guide/quick-start)
+打开 [本机投递工作台](http://127.0.0.1:9527/)：先在「设置中心」完成四个分区，再从「内地 / 香港」分组选平台登录并投递，最后到「投递数据看板」看汇总与每日日报。JobsDB 默认只采集，点岗位名称即可前往原站。[完整安装与使用步骤](/guide/quick-start)
 
 ## 📑 文档说明
 
-`docs/` 目录沿自上游项目，配置与部署流程通用；本 fork 的功能差异（多平台、并发、关键词过滤、香港站）以仓库根目录 [README](https://github.com/GF-creator-code/internbridge#readme) 为准。
+`docs/` 目录沿自上游项目，配置与部署流程通用；本 fork 的功能差异（统一设置中心、数据看板、工作形式、多平台与香港站）以仓库根目录 [README](https://github.com/GF-creator-code/internbridge#readme) 为准。

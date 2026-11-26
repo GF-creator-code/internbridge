@@ -182,7 +182,7 @@ public class OfferToday {
 
                 try {
                     // 通用关键词过滤：卡片类型（實習）已在采集层按平台特性过滤，这里按关键词列表过滤
-                    // 全局黑名单（配置管理中心 → 全局配置）：公司/职位命中即跳过
+                    // 全局黑名单（设置中心 → 全局规则）：公司/职位命中即跳过
                     if (pj.companyName != null && blackCompanies.stream().anyMatch(pj.companyName::contains)) {
                         log.info("命中全局公司黑名单，跳过：{} | {}", pj.companyName, pj.jobTitle);
                         continue;

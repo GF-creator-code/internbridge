@@ -11,7 +11,14 @@ import { Select } from '@/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import AnalysisContent from '@/app/zhilian/analysis/AnalysisContent'
 import PageHeader from '@/app/components/PageHeader'
+import PlatformTip from '@/app/components/PlatformTip'
 import { API_BASE } from '@/lib/api'
+import { parseKeywordsForDisplay, serializeKeywords } from '@/lib/keywords'
+import FeedbackBar from '@/app/components/FeedbackBar'
+import ConfigLoadError from '@/app/components/ConfigLoadError'
+import { useTaskControl } from '@/lib/useTaskControl'
+import { useTaskProgress } from '@/lib/useTaskProgress'
+import TaskProgressPanel from '@/app/components/TaskProgressPanel'
 
 interface ZhilianConfig {
   id?: number
@@ -25,7 +32,10 @@ interface ZhilianOptions { city: Option[] }
 
 export default function ZhilianPage() {
   const [isLoggedIn, setIsLoggedIn] = useState(false)
-  const [isDelivering, setIsDelivering] = useState(false)
+  // 投递任务的启停与失败反馈统一由 useTaskControl 提供
+  const task = useTaskControl(API_BASE)
+  const isDelivering = task.isRunning
+  const progress = useTaskProgress('zhilian')
   const [checkingLogin, setCheckingLogin] = useState(true)
   const [showLogoutDialog, setShowLogoutDialog] = useState(false)
   const [showSaveDialog, setShowSaveDialog] = useState(false)
@@ -37,6 +47,14 @@ export default function ZhilianPage() {
   const [config, setConfig] = useState<ZhilianConfig>({ keywords: '', cityCode: '', salary: '' })
   const [options, setOptions] = useState<ZhilianOptions>({ city: [] })
   const [loadingConfig, setLoadingConfig] = useState(true)
+  // 配置加载失败要显式告诉用户，否则空表单会被误当成真实配置
+  const [configLoadError, setConfigLoadError] = useState(false)
+  // 保存前的配置快照。用来判断「改了但没保存」——
+  // 原先六个平台都没有这个判断，用户改了关键词直接点开始投递，
+  // 跑的还是旧配置，而且界面完全看不出来。
+  const [savedConfig, setSavedConfig] = useState<ZhilianConfig | null>(null)
+  const dirty = savedConfig !== null && (Object.keys(config) as (keyof ZhilianConfig)[])
+    .some(key => savedConfig[key] !== config[key])
 
   useEffect(() => {
     if (typeof window === 'undefined' || typeof EventSource === 'undefined') {
@@ -50,6 +68,23 @@ export default function ZhilianPage() {
       onError: (e, attempt, delay) => {
         console.warn(`[智联招聘 SSE] 连接错误，第${attempt}次重连，延迟 ${delay}ms`, e)
         setCheckingLogin(false)
+      },
+      // 断线重连后补一次登录态拉取。SSE 断开期间服务端推的状态变化已经丢了，
+      // 只依赖推送的话，页面会永远停在「请先登录」——而用户其实早就登录了。
+      onReconnect: () => {
+        void (async () => {
+          try {
+            const res = await fetch(`${API_BASE}/api/zhilian/login-status`)
+            if (!res.ok) return
+            const data = await res.json()
+            if (typeof data.isLoggedIn === 'boolean') {
+              setIsLoggedIn(data.isLoggedIn)
+              setCheckingLogin(false)
+            }
+          } catch {
+            // 补偿拉取失败不影响后续重连
+          }
+        })()
       },
       listeners: [
         {
@@ -90,43 +125,20 @@ export default function ZhilianPage() {
   }, [])
 
   // 与猎聘一致的关键词解析/序列化
-  const parseKeywordsFromDb = (raw?: string): string => {
-    if (!raw) return ''
-    const t = raw.trim()
-    if (t.startsWith('[') && t.endsWith(']')) {
-      try {
-        const arr = JSON.parse(t)
-        if (Array.isArray(arr)) return arr.filter(Boolean).join(', ')
-      } catch (e) {
-        console.warn('[智联] 解析关键词JSON失败，使用原值:', e)
-      }
-    }
-    return t.replace(/，/g, ',')
-  }
-
-  const serializeKeywordsForDb = (display?: string): string => {
-    const raw = (display || '').trim()
-    if (!raw) return '[]'
-    const norm = raw.replace(/，/g, ',')
-    const tokens = norm
-      .split(',')
-      .map((s) => s.trim())
-      .filter((s) => s.length > 0)
-    return JSON.stringify(tokens)
-  }
-
   const fetchAllData = async () => {
     try {
       const res = await fetch(`${API_BASE}/api/zhilian/config`)
       const data = await res.json()
       if (data.config) {
         const normalized = { ...data.config }
-        normalized.keywords = parseKeywordsFromDb(data.config.keywords)
+        normalized.keywords = parseKeywordsForDisplay(data.config.keywords)
         setConfig(normalized)
+        setSavedConfig(normalized)
       }
       if (data.options) setOptions(data.options)
     } catch (e) {
       console.error('[智联] 获取配置失败:', e)
+      setConfigLoadError(true)
     } finally {
       setLoadingConfig(false)
     }
@@ -154,23 +166,19 @@ export default function ZhilianPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // 启动/停止的统一调用与失败反馈见 lib/useTaskControl。
+  // 原先这里把后端返回的中文原因丢进了 console，界面上什么都不显示。
   const handleStartDelivery = async () => {
-    try {
-      setIsDelivering(true)
-      const response = await fetch(`${API_BASE}/api/zhilian/start`, { method: 'POST' })
-      const data = await response.json()
-      if (!data.success) setIsDelivering(false)
-    } catch (error) {
-      setIsDelivering(false)
+    // 有未保存的修改时拦一道：不然跑的是旧配置，而用户以为改了就是改了
+    if (dirty) {
+      task.report({ kind: 'error', title: '请先保存配置', message: '当前配置有尚未保存的修改，直接开始投递会使用上一次保存的关键词和城市。' })
+      return
     }
+    await task.start('zhilian')
   }
 
   const handleStopDelivery = async () => {
-    try {
-      const response = await fetch(`${API_BASE}/api/zhilian/stop`, { method: 'POST' })
-      const data = await response.json()
-      if (data.success) setIsDelivering(false)
-    } catch (error) {}
+    await task.stop('zhilian')
   }
 
   const triggerLogout = async () => {
@@ -200,7 +208,7 @@ export default function ZhilianPage() {
 
   const handleSaveConfig = async () => {
     try {
-      const payload = { ...config, keywords: serializeKeywordsForDb(config.keywords) }
+      const payload = { ...config, keywords: serializeKeywords(config.keywords) }
       const response = await fetch(`${API_BASE}/api/zhilian/config`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -209,7 +217,7 @@ export default function ZhilianPage() {
       if (response.ok) {
         try { await fetch(`${API_BASE}/api/cookie/save?platform=zhilian`, { method: 'POST' }) } catch {}
         await fetchAllData()
-        setSaveResult({ success: true, message: '保存成功，配置已更新。' })
+        setSaveResult({ success: true, message: '保存成功，配置已更新。新配置在下次启动投递任务时生效。' })
       } else {
         setSaveResult({ success: false, message: '保存失败：后端返回异常状态。' })
       }
@@ -225,8 +233,8 @@ export default function ZhilianPage() {
     <div className="space-y-6">
       <PageHeader
         icon={<BiBriefcase className="text-2xl" />}
-        title="智联招聘配置"
-        subtitle="配置智联招聘平台的求职参数"
+        title="智联招聘"
+        subtitle="按关键词与城市筛选岗位，登录后启动自动投递。"
         iconClass="text-white"
         accentBgClass="bg-purple-500"
         actions={
@@ -257,6 +265,22 @@ export default function ZhilianPage() {
           </div>
         }
       />
+      <FeedbackBar feedback={task.feedback} onDismiss={task.clearFeedback} />
+      {dirty && (
+        <p role="status" className="text-sm text-amber-600 dark:text-amber-400">
+          有尚未保存的配置修改。请先点「保存配置」，再开始投递任务，否则会使用上一次保存的设置。
+        </p>
+      )}
+      {configLoadError && (
+        <ConfigLoadError onRetry={() => { setConfigLoadError(false); void fetchAllData() }} />
+      )}
+      <TaskProgressPanel
+        latest={progress.latest}
+        history={progress.history}
+        connected={progress.connected}
+        isRunning={isDelivering}
+        onClear={progress.clear}
+      />
 
       <Tabs defaultValue="config" className="w-full">
         <TabsList className="grid w-full grid-cols-2">
@@ -265,21 +289,10 @@ export default function ZhilianPage() {
         </TabsList>
 
         <TabsContent value="config" className="space-y-6 mt-6">
-          <Card className="animate-in fade-in slide-in-from-bottom-5 duration-700">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <BiBriefcase className="text-primary" />
-                智联招聘平台说明
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <p className="text-sm text-muted-foreground">请在浏览器标签页中登录智联招聘平台，登录成功后系统会自动检测登录状态。</p>
-                <p className="text-sm text-muted-foreground">登录成功后，点击"开始投递"按钮启动自动投递任务。</p>
-                <p className="text-sm text-muted-foreground">点击"保存配置"按钮可手动保存当前登录相关信息到数据库。</p>
-              </div>
-            </CardContent>
-          </Card>
+          <PlatformTip>
+            <p>先在浏览器标签页登录智联招聘，登录态会自动检测；改完点「保存配置」，再点「开始投递」。</p>
+            <p>需先在智联网页端设好「默认投递简历」，否则任务无法完成投递。</p>
+          </PlatformTip>
 
           {/* 配置表单 */}
           <Card className="animate-in fade-in slide-in-from-bottom-5 duration-700">

@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.getjobs.application.entity.ShixisengConfigEntity;
 import com.getjobs.application.entity.ShixisengJobDataEntity;
+import com.getjobs.application.worker.ProfileApplier;
 import com.getjobs.application.mapper.ShixisengConfigMapper;
 import com.getjobs.application.mapper.ShixisengJobDataMapper;
 import com.getjobs.worker.shixiseng.ShiXiSengConfig;
@@ -28,6 +29,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class ShixisengService {
     private final ShixisengConfigMapper shixisengConfigMapper;
+    private final ProfileApplier profileApplier;
     private final ShixisengJobDataMapper shixisengJobDataMapper;
     private final DataSource dataSource;
 
@@ -54,9 +56,11 @@ public class ShixisengService {
             return config;
         }
         config.setKeywords(parseListString(entity.getKeywords()));
+        config.setKeywords(profileApplier.applyKeywords(config.getKeywords()));
         config.setCity(safeTrim(entity.getCity()) == null ? "北京" : safeTrim(entity.getCity()));
         config.setIncludeKeywords(KeywordFilter.parse(entity.getIncludeKeywords()));
         config.setExcludeKeywords(KeywordFilter.parse(entity.getExcludeKeywords()));
+        config.setExcludeKeywords(profileApplier.applyExcludeKeywords(config.getExcludeKeywords()));
         config.setWaitTime(entity.getWaitTime() == null ? 2 : entity.getWaitTime());
         return config;
     }

@@ -5,6 +5,7 @@ import com.getjobs.application.entity.CookieEntity;
 import com.getjobs.application.entity.Job51ConfigEntity;
 import com.getjobs.application.entity.Job51OptionEntity;
 import com.getjobs.application.service.CookieService;
+import com.getjobs.application.service.TaskProgressBroadcaster;
 import com.getjobs.application.service.Job51Service;
 import com.getjobs.worker.manager.PlaywrightManager;
 // Boss 控制器已独立，移除 Boss 依赖
@@ -46,6 +47,7 @@ public class JobController {
     private final Job51JobService job51JobService;
     private final PlaywrightManager playwrightManager;
     private final CookieService cookieService;
+    private final TaskProgressBroadcaster taskProgressBroadcaster;
 
     // SSE emitter lists
     private final List<SseEmitter> job51ProgressEmitters = new CopyOnWriteArrayList<>();
@@ -137,6 +139,9 @@ public class JobController {
     }
 
     private void sendJob51Progress(JobProgressMessage message) {
+        // 同时转发到统一的进度广播器，前端只需订阅 /api/jobs/progress/stream
+        taskProgressBroadcaster.broadcast(message);
+
         List<SseEmitter> deadEmitters = new CopyOnWriteArrayList<>();
         for (SseEmitter emitter : job51ProgressEmitters) {
             try {

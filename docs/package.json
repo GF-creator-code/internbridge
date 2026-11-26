@@ -1,7 +1,7 @@
 {
-  "name": "getjobs-docs",
+  "name": "internbridge-docs",
   "version": "1.0.0",
-  "description": "Get Jobs AI 找工作助手官方文档",
+  "description": "InternBridge 实习投递工具文档",
   "type": "module",
   "scripts": {
     "docs:dev": "vitepress dev",

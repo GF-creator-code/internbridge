@@ -1,13 +1,13 @@
 spring:
   application:
-    name: get_jobs
+    name: internbridge
   profiles:
     active: dev
   info:
     app:
-      name: Get Jobs
+      name: InternBridge
       version: 2.0.1
-      description: https://github.com/loks666/get_jobs
+      description: 本地运行的跨平台实习投递管理端
   banner:
     charset: UTF-8
     location: classpath:banner.txt

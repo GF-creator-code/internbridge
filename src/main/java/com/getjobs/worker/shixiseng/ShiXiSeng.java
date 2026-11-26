@@ -296,7 +296,7 @@ public class ShiXiSeng {
 
                 try {
                     // 通用关键词过滤：排除词命中标题/公司即跳过；必含词为空则不限标题
-                    // 全局黑名单（配置管理中心 → 全局配置）：公司/职位命中即跳过
+                    // 全局黑名单（设置中心 → 全局规则）：公司/职位命中即跳过
                     if (pj.companyName != null && blackCompanies.stream().anyMatch(pj.companyName::contains)) {
                         log.info("命中全局公司黑名单，跳过：{} | {}", pj.companyName, pj.jobTitle);
                         continue;

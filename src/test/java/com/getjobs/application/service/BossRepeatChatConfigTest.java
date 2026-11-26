@@ -17,7 +17,7 @@ class BossRepeatChatConfigTest {
     void migratesOldDatabaseWithoutLosingSettingsAndKeepsEnabledValueOnRestart() throws Exception {
         SQLiteDataSource source = new SQLiteDataSource();
         source.setUrl("jdbc:sqlite:" + directory.resolve("test.db"));
-        BossService service = new BossService(null, null, null, null, null, source);
+        BossService service = new BossService(null, null, null, null, null, null, null, source);
         try (var connection = source.getConnection(); var statement = connection.createStatement()) {
             statement.execute("CREATE TABLE boss_config (id INTEGER PRIMARY KEY, say_hi TEXT)");
             statement.execute("INSERT INTO boss_config VALUES (1, '原有招呼语')");
@@ -45,7 +45,7 @@ class BossRepeatChatConfigTest {
         existing.setId(1L);
         existing.setAllowRepeatChat(0);
         when(mapper.selectOne(any())).thenReturn(existing);
-        BossService service = new BossService(null, null, mapper, null, null, null);
+        BossService service = new BossService(null, null, mapper, null, null, null, null, null);
         BossConfigEntity patch = new BossConfigEntity();
         patch.setAllowRepeatChat(1);
         patch.setRepeatChatMessages("第一条\n第二条");

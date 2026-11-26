@@ -75,8 +75,8 @@ public class ResumeSkillsService {
             raw = ai.sendRequest(prompt);
         } catch (RuntimeException e) {
             if (e.getMessage() != null && e.getMessage().startsWith("缺少必要配置:"))
-                throw new IllegalArgumentException("请先在环境配置中填写 AI 地址、密钥和模型。");
-            throw new IllegalStateException("AI 请求失败，请检查环境配置中的模型连接和额度后重试。");
+                throw new IllegalArgumentException("请先在「设置中心 → 连接与通知」填写模型地址、密钥和模型名称。");
+            throw new IllegalStateException("AI 请求失败，请检查「设置中心 → 连接与通知」中的模型连接和额度后重试。");
         }
         if (raw == null) throw invalidOutput();
         String reply = raw.strip().replaceFirst("(?is)^" + FENCE + "(?:json)?\\s*", "").replaceFirst("\\s*" + FENCE + "$", "");

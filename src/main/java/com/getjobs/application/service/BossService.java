@@ -13,6 +13,7 @@ import com.getjobs.application.entity.BossJobDataEntity;
 import com.getjobs.application.mapper.BossConfigMapper;
 import com.getjobs.application.mapper.BossIndustryMapper;
 import com.getjobs.application.mapper.BossOptionMapper;
+import com.getjobs.application.worker.ProfileApplier;
 import com.getjobs.worker.boss.BossConfig;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -47,6 +48,8 @@ public class BossService {
     private final BossOptionMapper bossOptionMapper;
     private final BossIndustryMapper bossIndustryMapper;
     private final BossConfigMapper bossConfigMapper;
+    private final ProfileApplier profileApplier;
+    private final GlobalBlacklistService globalBlacklistService;
     private final BlacklistMapper blacklistMapper;
     private final BossJobDataMapper bossJobDataMapper;
     private final javax.sql.DataSource dataSource;
@@ -328,6 +331,7 @@ public class BossService {
 
         // 关键词（允许逗号或括号列表），直接解析为列表
         config.setKeywords(parseListString(entity.getKeywords()));
+        config.setKeywords(profileApplier.applyKeywords(config.getKeywords()));
 
         // 将中文名转换为代码，供 Worker 使用
         // 城市：单值或列表，统一转换为代码列表
@@ -491,20 +495,9 @@ public class BossService {
      * @return 是否成功
      */
     public boolean addBlacklist(String type, String value) {
-        // 检查是否已存在
-        LambdaQueryWrapper<BlacklistEntity> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(BlacklistEntity::getType, type)
-                .eq(BlacklistEntity::getValue, value);
-        if (blacklistMapper.selectCount(wrapper) > 0) {
-            return false; // 已存在
-        }
-
-        BlacklistEntity entity = new BlacklistEntity();
-        entity.setType(type);
-        entity.setValue(value);
-        entity.setCreatedAt(LocalDateTime.now());
-        entity.setUpdatedAt(LocalDateTime.now());
-        return blacklistMapper.insert(entity) > 0;
+        // 统一走全局黑名单服务：Boss 页内嵌黑名单与「全局配置」页操作的是同一张表，
+        // 原先这里有一份独立实现，两边行为容易不一致（例如 type 校验）。
+        return globalBlacklistService.add(type, value) != null;
     }
 
     /**
@@ -525,10 +518,12 @@ public class BossService {
      * @return 是否成功
      */
     public boolean removeBlacklist(String type, String value) {
-        LambdaQueryWrapper<BlacklistEntity> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(BlacklistEntity::getType, type)
-                .eq(BlacklistEntity::getValue, value);
-        return blacklistMapper.delete(wrapper) > 0;
+        // 与 addBlacklist 同理，统一委托给全局黑名单服务
+        var target = globalBlacklistService.getAll().stream()
+                .filter(e -> type.equals(e.getType()) && value.equals(e.getValue()))
+                .findFirst()
+                .orElse(null);
+        return target != null && globalBlacklistService.removeById(target.getId());
     }
 
     /**
@@ -537,7 +532,7 @@ public class BossService {
      * @return 所有黑名单实体
      */
     public List<BlacklistEntity> getAllBlacklist() {
-        return blacklistMapper.selectList(null);
+        return globalBlacklistService.getAll();
     }
 
     // ==================== boss_data（岗位数据）相关方法 ====================

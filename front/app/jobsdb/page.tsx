@@ -6,13 +6,18 @@ import { BiLogIn, BiLogOut, BiSave, BiBriefcase, BiPlay, BiStop } from 'react-ic
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { Select } from '@/components/ui/select'
 import { Label } from '@/components/ui/label'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import AnalysisContent from '@/app/jobsdb/analysis/AnalysisContent'
 import PageHeader from '@/app/components/PageHeader'
+import PlatformTip from '@/app/components/PlatformTip'
 import ToggleSwitch, { toBool } from '@/app/components/ToggleSwitch'
 import KeywordListsField, { parseKeywordList, serializeKeywordList } from '@/app/components/KeywordListsField'
 import { API_BASE } from '@/lib/api'
+import { parseKeywordsForDisplay, serializeKeywords } from '@/lib/keywords'
+import TaskProgressPanel from '@/app/components/TaskProgressPanel'
+import { useTaskProgress } from '@/lib/useTaskProgress'
 
 interface JobsdbConfig {
   id?: number
@@ -40,6 +45,8 @@ export default function JobsdbPage() {
   const [savedConfig, setSavedConfig] = useState<JobsdbConfig | null>(null)
   const [savingConfig, setSavingConfig] = useState(false)
   const [taskMessage, setTaskMessage] = useState('')
+  // 订阅投递进度：原先这里没有任何进度反馈，任务跑起来界面完全静止
+  const progress = useTaskProgress('jobsdb')
 
   const [config, setConfig] = useState<JobsdbConfig>({ keywords: '', city: 'Hong Kong', account: '', password: '', resumePath: '', includeKeywords: '', excludeKeywords: '', enableAi: true, waitTime: 2, collectOnly: true })
   const [loadingConfig, setLoadingConfig] = useState(true)
@@ -56,6 +63,23 @@ export default function JobsdbPage() {
       onError: (e, attempt, delay) => {
         console.warn(`[JobsDB SSE] 连接错误，第${attempt}次重连，延迟 ${delay}ms`, e)
         setCheckingLogin(false)
+      },
+      // 断线重连后补一次登录态拉取。SSE 断开期间服务端推的状态变化已经丢了，
+      // 只依赖推送的话，页面会永远停在「请先登录」——而用户其实早就登录了。
+      onReconnect: () => {
+        void (async () => {
+          try {
+            const res = await fetch(`${API_BASE}/api/jobsdb/login-status`)
+            if (!res.ok) return
+            const data = await res.json()
+            if (typeof data.isLoggedIn === 'boolean') {
+              setIsLoggedIn(data.isLoggedIn)
+              setCheckingLogin(false)
+            }
+          } catch {
+            // 补偿拉取失败不影响后续重连
+          }
+        })()
       },
       listeners: [
         {
@@ -91,31 +115,6 @@ export default function JobsdbPage() {
     return () => client.close()
   }, [])
 
-  const parseKeywordsFromDb = (raw?: string): string => {
-    if (!raw) return ''
-    const t = raw.trim()
-    if (t.startsWith('[') && t.endsWith(']')) {
-      try {
-        const arr = JSON.parse(t)
-        if (Array.isArray(arr)) return arr.filter(Boolean).join(', ')
-      } catch (e) {
-        console.warn('[JobsDB] 解析关键词JSON失败，使用原值:', e)
-      }
-    }
-    return t.replace(/，/g, ',')
-  }
-
-  const serializeKeywordsForDb = (display?: string): string => {
-    const raw = (display || '').trim()
-    if (!raw) return '[]'
-    const norm = raw.replace(/，/g, ',')
-    const tokens = norm
-      .split(',')
-      .map((s) => s.trim())
-      .filter((s) => s.length > 0)
-    return JSON.stringify(tokens)
-  }
-
   const dirty = savedConfig !== null && (Object.keys(config) as (keyof JobsdbConfig)[]).some(key => savedConfig[key] !== config[key])
 
   const fetchAllData = async () => {
@@ -125,7 +124,7 @@ export default function JobsdbPage() {
       const data = await res.json()
       if (!res.ok || !data.config) throw new Error()
       const normalized = { ...data.config }
-      normalized.keywords = parseKeywordsFromDb(data.config.keywords)
+      normalized.keywords = parseKeywordsForDisplay(data.config.keywords)
       normalized.includeKeywords = parseKeywordList(data.config.includeKeywords)
       normalized.excludeKeywords = parseKeywordList(data.config.excludeKeywords)
       normalized.enableAi = toBool(data.config.enableAi, true)
@@ -214,7 +213,7 @@ export default function JobsdbPage() {
       const payload = {
         ...config,
         password: config.password || undefined,
-        keywords: serializeKeywordsForDb(config.keywords),
+        keywords: serializeKeywords(config.keywords),
         includeKeywords: serializeKeywordList(config.includeKeywords),
         excludeKeywords: serializeKeywordList(config.excludeKeywords),
       }
@@ -228,7 +227,7 @@ export default function JobsdbPage() {
         const updated = { ...config, password: undefined }
         setConfig(updated)
         setSavedConfig(updated)
-        setSaveResult({ success: true, message: '保存成功，配置已更新。' })
+        setSaveResult({ success: true, message: '保存成功，配置已更新。新配置在下次启动投递任务时生效。' })
       } else {
         setSaveResult({ success: false, message: '保存失败：后端返回异常状态。' })
       }
@@ -244,8 +243,8 @@ export default function JobsdbPage() {
     <div className="space-y-6">
       <PageHeader
         icon={<BiBriefcase className="text-2xl" />}
-        title="JobsDB 配置"
-        subtitle="采集香港实习，在「投递分析」里打开原站职位。"
+        title="JobsDB"
+        subtitle="香港岗位默认只采集，可到「投递分析」打开原站申请。"
         iconClass="text-white"
         accentBgClass="bg-violet-600"
         actions={
@@ -280,6 +279,13 @@ export default function JobsdbPage() {
       {taskMessage && <p role="status" className="text-sm">{taskMessage}</p>}
       {dirty && <p role="status" className="text-sm">有未保存的配置，请先保存再开始任务。</p>}
       {!loadingConfig && !savedConfig && <div role="alert">未能读取 JobsDB 配置。<Button variant="outline" onClick={fetchAllData}>重新读取</Button></div>}
+      <TaskProgressPanel
+        latest={progress.latest}
+        history={progress.history}
+        connected={progress.connected}
+        isRunning={isDelivering}
+        onClear={progress.clear}
+      />
       <Tabs defaultValue="config" className="w-full">
         <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="config">平台配置</TabsTrigger>
@@ -287,21 +293,10 @@ export default function JobsdbPage() {
         </TabsList>
 
         <TabsContent value="config" className="space-y-6 mt-6">
-          <Card className="animate-in fade-in slide-in-from-bottom-5 duration-700">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <BiBriefcase className="text-primary" />
-                JobsDB 平台说明
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <p className="text-sm text-muted-foreground">JobsDB 是香港招聘平台，岗位全部在香港，薪资以 HKD 计。</p>
-                <p className="text-sm text-muted-foreground">保存账号密码后点「登录 JobsDB」，系统会自动登录并保存 Cookie；失败时请在浏览器窗口手动完成。</p>
-                <p className="text-sm text-muted-foreground">默认只采集。到「投递分析」点岗位名称可在原站申请。实验性 Quick apply 使用 SEEK 账户内的个人资料，姓名、电话和居住地请先在原站填写。</p>
-              </div>
-            </CardContent>
-          </Card>
+          <PlatformTip title="平台须知">
+            <p>香港站，岗位全部在香港，薪资以 HKD 计。保存账号密码后点「登录 JobsDB」，自动登录失败时请在浏览器窗口手动完成。</p>
+            <p>默认只采集。到「投递分析」点岗位名称可在原站申请；实验性 Quick apply 使用 SEEK 账户资料，姓名、电话和居住地请先在原站填好。</p>
+          </PlatformTip>
 
           <Card className="animate-in fade-in slide-in-from-bottom-5 duration-700">
             <CardHeader>
@@ -326,11 +321,11 @@ export default function JobsdbPage() {
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="jobsdb-city">城市</Label>
-                    <Input id="jobsdb-city"
-                      placeholder="香港"
-                      value={config.city || ''}
-                      onChange={(e) => setConfig((c) => ({ ...c, city: e.target.value }))}
-                    />
+                    <Select id="jobsdb-city" value={config.city || '香港'}
+                      onChange={(e) => setConfig((c) => ({ ...c, city: e.target.value }))}>
+                      <option value="香港">香港</option>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">JobsDB 目前只采集香港岗位。</p>
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="jobsdb-account">登录账号（邮箱或手机号）</Label>

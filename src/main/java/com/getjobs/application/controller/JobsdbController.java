@@ -3,6 +3,7 @@ package com.getjobs.application.controller;
 import com.getjobs.application.entity.CookieEntity;
 import com.getjobs.application.entity.JobsdbConfigEntity;
 import com.getjobs.application.service.CookieService;
+import com.getjobs.application.service.TaskProgressBroadcaster;
 import com.getjobs.application.service.JobsdbService;
 import com.getjobs.worker.manager.PlaywrightManager;
 import com.getjobs.worker.service.JobsdbJobService;
@@ -36,6 +37,9 @@ public class JobsdbController {
 
     @Autowired
     private JobsdbJobService jobsdbJobService;
+
+    @Autowired
+    private TaskProgressBroadcaster taskProgressBroadcaster;
 
     // ==================== 配置管理 ====================
 
@@ -203,9 +207,22 @@ public class JobsdbController {
                 return ResponseEntity.badRequest().body(response);
             }
 
+            // 登录检查：JobsDB 的岗位列表和 Quick apply 都走 SEEK 账号，
+            // 未登录时会被重定向到 login.seek.com，任务跑起来只会空转。
+            // 其余六个平台都在这里拦一道，JobsDB 原先漏了，前端会显示"启动成功"
+            // 但实际什么也没采到 —— 新手完全看不出原因。
+            if (!playwrightManager.isLoggedIn("jobsdb")) {
+                response.put("success", false);
+                response.put("message", "请先登录 JobsDB（需要 SEEK 账号）");
+                response.put("status", "not_logged_in");
+                return ResponseEntity.badRequest().body(response);
+            }
+
             CompletableFuture.runAsync(() -> {
-                jobsdbJobService.executeDelivery(progressMessage ->
-                        log.info("[{}] {}", progressMessage.getPlatform(), progressMessage.getMessage()));
+                jobsdbJobService.executeDelivery(progressMessage -> {
+                    log.info("[{}] {}", progressMessage.getPlatform(), progressMessage.getMessage());
+                    taskProgressBroadcaster.broadcast(progressMessage);
+                });
             });
 
             response.put("success", true);

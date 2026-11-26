@@ -43,7 +43,7 @@ class FreshInstallationTest {
             assertEquals("", app.getBean(AiService.class).getAiConfig().getIntroduce());
             var file = new MockMultipartFile("file", "example.txt", "text/plain", "Built SQL reports.".getBytes());
             assertTrue(assertThrows(IllegalArgumentException.class, () -> app.getBean(ResumeSkillsService.class).extract(file))
-                    .getMessage().contains("环境配置"));
+                    .getMessage().contains("设置中心"));
             app.getBean(AiService.class).saveOrUpdateAiConfig("Synthetic SQL project", "Custom template");
 
             var jdbc = app.getBean(JdbcTemplate.class);
