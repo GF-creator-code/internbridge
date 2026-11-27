@@ -222,29 +222,11 @@ public class ZhiLian {
             log.info("被过滤（非实习岗）：{} | {}", pj.companyName, pj.jobTitle);
             return false;
         }
-        if (isLegal(pj.jobTitle) || isLegal(pj.companyName)) {
-            log.info("被过滤（法律岗）：{} | {}", pj.companyName, pj.jobTitle);
-            return false;
-        }
         if (pj.companyName != null && (pj.companyName.contains("腾讯") || pj.companyName.contains("字节"))) {
             log.info("被过滤（硬性排除）：{} | {}", pj.companyName, pj.jobTitle);
             return false;
         }
         return true;
-    }
-
-    private boolean isLegal(String text) {
-        if (text == null || text.isBlank()) {
-            return false;
-        }
-        String[] terms = {"法务", "法律", "律师", "律所", "非诉", "诉讼", "仲裁", "知识产权", "专利",
-                "招聘", "猎头", "獵頭"};
-        for (String t : terms) {
-            if (text.contains(t)) {
-                return true;
-            }
-        }
-        return false;
     }
 
     private void deliverOne(PageJob pj) {
