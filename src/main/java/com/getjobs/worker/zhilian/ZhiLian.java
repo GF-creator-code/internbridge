@@ -216,14 +216,10 @@ public class ZhiLian {
         return jobs;
     }
 
-    /** 只投实习岗；避开法律岗；避开腾讯/字节 */
+    /** 只投实习岗 */
     private boolean isDeliverable(PageJob pj) {
         if (pj.jobTitle == null || !pj.jobTitle.contains("实习")) {
             log.info("被过滤（非实习岗）：{} | {}", pj.companyName, pj.jobTitle);
-            return false;
-        }
-        if (pj.companyName != null && (pj.companyName.contains("腾讯") || pj.companyName.contains("字节"))) {
-            log.info("被过滤（硬性排除）：{} | {}", pj.companyName, pj.jobTitle);
             return false;
         }
         return true;

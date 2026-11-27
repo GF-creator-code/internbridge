@@ -363,13 +363,9 @@ public class Liepin {
             if (companyName == null) companyName = "公司";
             if (salary == null) salary = "";
 
-            // 只投实习岗；避开腾讯/字节、超小公司（1-49 人）
+            // 只投实习岗；避开超小公司（1-49 人）
             if (!jobName.contains("实习")) {
                 log.info("被过滤（非实习岗）：公司={} | 岗位={}", companyName, jobName);
-                continue;
-            }
-            if (companyName.contains("腾讯") || companyName.contains("字节")) {
-                log.info("被过滤（硬性排除）：公司={} | 岗位={}", companyName, jobName);
                 continue;
             }
             if (compScale != null && compScale.contains("1-49")) {
