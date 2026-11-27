@@ -55,9 +55,16 @@ def check_jar(jar, browser_tests):
                         raise RuntimeError(f"Missing packaged frontend at {route}")
                 if not (directory / "db" / "getjobs.db").is_file():
                     raise RuntimeError("The local database was not created")
-                jobsdb = json.loads(request(origin, "/api/jobsdb/config"))["config"]
-                if jobsdb.get("collectOnly") is not True:
-                    raise RuntimeError("JobsDB must default to collection only")
+                # Default page configs are seeded by a CommandLineRunner that runs
+                # after the web server is ready, so poll briefly for the defaults.
+                deadline = time.monotonic() + 60
+                while True:
+                    jobsdb = json.loads(request(origin, "/api/jobsdb/config")).get("config") or {}
+                    if jobsdb.get("collectOnly") is True:
+                        break
+                    if time.monotonic() > deadline:
+                        raise RuntimeError("JobsDB must default to collection only")
+                    time.sleep(0.5)
                 if browser_tests:
                     tests = Path(__file__).resolve().parents[1] / "front" / "tests"
                     subprocess.run(
