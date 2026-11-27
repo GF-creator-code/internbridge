@@ -33,17 +33,31 @@
 
 ## 首次启动
 
-Windows 需要 Git、JDK 21、Node.js 22.13 或更高版本，以及 Corepack 或 pnpm。配置好 `JAVA_HOME` 后，在 PowerShell 运行以下命令。
+### 运行下载版
+
+安装 [Java 21](https://adoptium.net/temurin/releases/?version=21)，将 [Releases](https://github.com/GF-creator-code/internbridge/releases) 中 `v0.2.0` 或更新版本的 JAR 放进自己的数据目录。在该目录打开终端运行（按下载版本修改文件名）。
+
+```sh
+java -jar internbridge-0.2.0.jar
+```
+
+打开 [本机投递工作台](http://127.0.0.1:9527/)。JAR 含管理界面和数据库模板，首次启动自动建立 `db/getjobs.db`。登录招聘平台、采集和投递时还需安装 Google Chrome。公开文档站提供使用说明，工作台运行在本机。
+
+`v0.1.0` 随附旧版工作台。如果 Releases 还没有新版 JAR，可以按下面的源码方式启动当前版本。
+
+### 从源码启动
+
+准备 Git、JDK 21、Node.js 22.13 或更高版本，以及 [pnpm](https://pnpm.io/installation) 或 Corepack。将 `JAVA_HOME` 指向 JDK 21 后，在 Windows PowerShell 运行。
 
 ```powershell
 git clone https://github.com/GF-creator-code/internbridge.git
 cd internbridge
-powershell -File .\start-local.ps1
+.\gradlew.bat bootRun
 ```
 
-首次启动会构建前端，并下载带有城市、职位等选项的上游数据库模板，校验后保存为 `db/getjobs.db`。已有数据库会直接使用。macOS、Linux 或需要手动准备数据库的用户可参见 [快速开始](docs/guide/quick-start.md) 和 [上游数据库模板](https://github.com/loks666/get_jobs/releases/tag/v2.0.1)。
+macOS 和 Linux 在仓库根目录运行 `./gradlew bootRun`。源码首次启动需要联网获取构建依赖。详细安装、升级和排错步骤见 [快速上手](docs/guide/quick-start.md)。
 
-打开 [本机投递工作台](http://127.0.0.1:9527/)。侧边栏按「工作台 / 内地 / 香港」分组，手机点击「导航」。想先试简历匹配，打开「设置中心 → 连接与通知」连接模型，再切到「简历与匹配」上传简历。想先看岗位，可在 JobsDB 保存搜索条件、登录后点击「开始采集」。
+可以先打开「投递数据看板」确认页面能读到本机数据。想先看岗位，可在 JobsDB 保持默认的只采集模式，保存搜索条件、登录后点击「开始采集」。想试简历匹配，在「设置中心 → 连接与通知」配置模型，再切到「简历与匹配」。
 
 ## 平台投递设置
 
@@ -100,6 +114,10 @@ src/main/java/com/getjobs/
     ├── PlaywrightManager.java      共享浏览器：登录检测 / 扫码 / Cookie 生命周期
     └── PlatformTaskBrowser.java    任务浏览器：每平台独立实例 + 持久化 profile + 单线程，平台间并发
 ```
+
+## 维护与发布
+
+构建 JAR、验证首次安装以及更新发布附件的步骤见[维护与发布](docs/guide/maintenance.md)。
 
 ## 📑 更新日志（本 fork）
 

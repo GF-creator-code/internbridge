@@ -2,6 +2,7 @@ package com.getjobs.application.config;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.io.Resource;
 import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
 import org.springframework.web.servlet.config.annotation.ViewControllerRegistry;
@@ -36,8 +37,10 @@ public class StaticResourceConfiguration implements WebMvcConfigurer {
 
         boolean hasDistResources = Files.exists(distPath);
         boolean hasStaticResources = Files.exists(staticPath);
+        boolean hasPackagedResources = new ClassPathResource("dist/index.html").exists()
+                || new ClassPathResource("static/index.html").exists();
 
-        if (hasDistResources || hasStaticResources) {
+        if (hasDistResources || hasStaticResources || hasPackagedResources) {
             log.info("配置静态资源服务:");
 
             // 根据前端服务运行状态输出不同日志
@@ -49,6 +52,9 @@ public class StaticResourceConfiguration implements WebMvcConfigurer {
                 }
                 if (hasStaticResources) {
                     log.info("使用 static 目录: {}", staticPath.toAbsolutePath());
+                }
+                if (!hasDistResources && !hasStaticResources) {
+                    log.info("使用包内前端静态资源");
                 }
             }
 

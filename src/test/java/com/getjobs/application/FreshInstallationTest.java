@@ -18,21 +18,20 @@ import java.nio.file.Path;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
-/** Exercises the same initialization path as bootRun, using a private copy of the upstream first-install template. */
+/** Exercises the first startup and restart using only resources shipped with the application. */
 class FreshInstallationTest {
     @TempDir Path directory;
 
-    @Test void startsFromAnUpstreamTemplateAndPreservesAnEditedProfile() throws Exception {
-        String source = System.getenv("GETJOBS_TEST_DB_TEMPLATE");
-        assumeTrue(source != null && !source.isBlank(), "Set GETJOBS_TEST_DB_TEMPLATE to the upstream database template");
-        Path database = directory.resolve("getjobs.db");
-        Files.copy(Path.of(source), database);
+    @Test void startsWithoutADatabaseAndPreservesAnEditedProfile() {
+        Path database = directory.resolve("db/getjobs.db");
+        assertFalse(Files.exists(database));
         String[] args = {"--spring.datasource.url=jdbc:sqlite:" + database,
+                "--internbridge.database-file=" + database,
                 "--internbridge.open-dashboard=false", "--internbridge.open-platforms=false",
                 "--spring.main.banner-mode=off", "--logging.file.name="};
         try (var app = new SpringApplicationBuilder(GetJobsApplication.class).web(WebApplicationType.NONE).run(args)) {
+            assertTrue(Files.isRegularFile(database));
             var jobsdb = app.getBean(JobsdbService.class);
             var shixiseng = app.getBean(ShixisengService.class);
             var offerToday = app.getBean(OfferTodayService.class);
@@ -47,6 +46,7 @@ class FreshInstallationTest {
             app.getBean(AiService.class).saveOrUpdateAiConfig("Synthetic SQL project", "Custom template");
 
             var jdbc = app.getBean(JdbcTemplate.class);
+            assertTrue(jdbc.queryForObject("SELECT COUNT(*) FROM boss_option", Integer.class) > 0);
             jdbc.update("INSERT INTO jobsdb_data(job_id,job_title,company_name,location,salary,delivery_status) VALUES(?,?,?,?,?,?)",
                     "example-1", "SQL intern", "Example, Partners", "香港", "HK$12,000–16,000/月", "未投递");
             jdbc.update("INSERT INTO jobsdb_data(job_id,job_title,company_name,location,salary,delivery_status) VALUES(?,?,?,?,?,?)",

@@ -52,7 +52,7 @@ class StudentFlowsTest(unittest.TestCase):
         p.route("**/api/boss/config", lambda r: r.fulfill(json={"config": {"enableAi": False}}))
         p.route("**/api/ai/resume/skills", lambda r: r.fulfill(json=[skill, ignored]))
         p.route("**/api/ai/resume/match", match)
-        p.goto(self.base + "/ai-config")
+        p.goto(self.base + "/settings?tab=match")
         expect(p.get_by_label("技能介绍", exact=True)).to_have_value("Python project")
         p.locator("#resume-file").set_input_files({"name": "synthetic.txt", "mimeType": "text/plain",
                                                     "buffer": b"Built SQL reports. Prepared Excel charts."})
@@ -84,7 +84,7 @@ class StudentFlowsTest(unittest.TestCase):
             else:
                 route.fulfill(json={"success": True, "data": {"introduce": "Recovered profile", "prompt": "template"}})
         self.page.route("**/api/ai/config", request)
-        self.page.goto(self.base + "/ai-config")
+        self.page.goto(self.base + "/settings?tab=match")
         expect(self.page.get_by_text("无法读取已保存的技能介绍。", exact=False)).to_be_visible()
         expect(self.page.locator("#introduce")).to_have_count(0)
         self.page.get_by_role("button", name="重新读取").click()
@@ -94,7 +94,7 @@ class StudentFlowsTest(unittest.TestCase):
     def test_keyboard_navigation_and_mobile_width(self):
         p = self.page
         p.goto(self.base + "/")
-        expect(p).to_have_url(self.base + "/boss")
+        expect(p.get_by_role("heading", name="欢迎使用 InternBridge")).to_be_visible()
         menu = p.get_by_role("button", name="导航", exact=True)
         menu.click()
         expect(p.get_by_role("dialog", name="导航菜单")).to_be_visible()
@@ -130,7 +130,8 @@ class StudentFlowsTest(unittest.TestCase):
                 route.fulfill(json={"items": records, "total": len(records), "page": 1, "size": 20})
         p.route("**/api/jobsdb/stats?*", data)
         p.route("**/api/jobsdb/list?*", data)
-        p.goto(self.base + "/jobsdb/analysis")
+        p.goto(self.base + "/jobsdb")
+        p.get_by_role("tab", name="投递分析").click()
         expect(p.get_by_role("link", name="Design Intern")).to_be_visible()
         p.get_by_label("公司或岗位关键词").fill("SQL")
         p.get_by_role("button", name="未投递", exact=True).click()

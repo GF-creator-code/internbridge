@@ -92,6 +92,7 @@ export default defineConfig({
         text: '🛡️ 进阶与运维',
         items: [
           { text: '常见问题与排错指南', link: '/guide/faq' },
+          { text: '维护与发布', link: '/guide/maintenance' },
           { text: '更新日志与版本历史', link: '/guide/changelog' },
           { text: '界面与运行截图', link: '/guide/screenshots' },
           { text: '社区与贡献', link: '/guide/community' },

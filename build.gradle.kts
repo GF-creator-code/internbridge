@@ -1,5 +1,6 @@
 // Application build, dependency management, and packaging.
 import java.time.LocalDate
+import org.springframework.boot.gradle.tasks.bundling.BootJar
 import org.springframework.boot.gradle.tasks.run.BootRun
 import org.gradle.language.jvm.tasks.ProcessResources
 
@@ -11,7 +12,7 @@ plugins {
 }
 
 group = "com.getjobs"
-version = "0.1.0"
+version = providers.gradleProperty("releaseVersion").getOrElse("0.2.0-SNAPSHOT")
 
 java {
     toolchain { languageVersion.set(JavaLanguageVersion.of(21)) }
@@ -63,6 +64,10 @@ dependencies {
 }
 
 tasks.test { useJUnitPlatform() }
+
+tasks.named<BootJar>("bootJar") {
+    archiveBaseName.set("internbridge")
+}
 
 // 显示已过时 API 的详细告警，便于定位并修复
 tasks.withType<JavaCompile> {
@@ -157,9 +162,7 @@ fun resolveNodePath(): String? = findOnPath("node")?.absolutePath
 // 那个目录在 .gitignore 里，clone 下来没有；不构建的话启动日志会打
 // "未找到可用的管理页面，跳过自动打开浏览器"，浏览器也不会弹出来。
 //
-// 注意不能用 `pnpm run build:prod`：pnpm 跑脚本前会做依赖检查，而本项目的
-// sharp / unrs-resolver 构建脚本被 pnpm 默认忽略，检查会以退出码 1 结束，
-// 把真正的构建挡在外面。所以这里直接用 node 调 next 和复制脚本。
+// 直接调用 Next.js 与复制脚本，构建配置与 front/package.json 保持一致。
 // ---------------------------------------------------------------------------
 val frontendDir = layout.projectDirectory.dir("front").asFile
 val frontendDistDir = layout.projectDirectory.dir("src/main/resources/dist").asFile
@@ -186,29 +189,24 @@ val buildFrontend = tasks.register("buildFrontend") {
 
     doLast {
         val node = findOnPath("node")
-        if (node == null) {
-            logger.warn("PATH 里没找到 node，跳过前端构建；管理页面将不可用。" +
-                    "装好 Node.js 后执行: gradlew buildFrontend -PrebuildFrontend")
-            return@doLast
-        }
+            ?: throw GradleException("构建管理页面需要 Node.js 22.13+。安装后重新运行 Gradle。")
 
-        // 依赖没装（或只剩个空目录）时先补上
-        if (!File(frontendDir, "node_modules/next").isDirectory) {
+        // 重新构建时同步依赖，避免更新源码后继续使用旧的 node_modules。
+        if (forceRebuild || !File(frontendDir, "node_modules/next").isDirectory) {
             val pnpm = findOnPath("pnpm")
             val installer = pnpm?.let { listOf(it.absolutePath) }
                 ?: findOnPath("corepack")?.let { listOf(it.absolutePath, "pnpm") }
                 ?: throw GradleException("首次构建管理页面需要 pnpm 或 Corepack，请安装后重试。")
             logger.lifecycle("安装管理页面依赖…")
-            // pnpm 会因为"忽略了 sharp/unrs-resolver 的构建脚本"以 1 退出，
-            // 这不是真失败，所以不校验退出码，改为下面检查 node_modules 是否到位
-            providers.exec {
+            val install = providers.exec {
                 workingDir = frontendDir
                 commandLine(installer + listOf("install", "--frozen-lockfile"))
                 isIgnoreExitValue = true
-            }.result.get()
+            }
 
-            if (!File(frontendDir, "node_modules/next").isDirectory) {
-                throw GradleException("前端依赖未能安装，请在 front 目录执行 pnpm install --frozen-lockfile 后重试。")
+            if (install.result.get().exitValue != 0) {
+                val output = install.standardOutput.asText.get() + install.standardError.asText.get()
+                throw GradleException("前端依赖安装失败（pnpm install --frozen-lockfile）。\n${output.trim()}")
             }
         }
 

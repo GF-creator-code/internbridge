@@ -6,16 +6,21 @@
 
 ## 一、环境与启动报错
 
-### Q1: 启动时报错 `SQLite` 找不到表格或找不到数据库？
-Windows 启动脚本会自动准备数据库。若下载失败，可手动将上游的 `getjobs.db.template` 保存到项目根目录的 `db/getjobs.db`。更新时请保留自己的数据库，其中有已保存的技能、配置和记录。[数据库模板](https://github.com/loks666/get_jobs/releases/tag/v2.0.1) · [安装及更新步骤](/guide/quick-start)
+### SQLite 找不到表或数据库
+
+当前版本在运行目录中创建 `db/getjobs.db`。请确认从可写的专用目录启动，以及该目录的 `db/` 可以读取和写入。如果已有库损坏，先停止服务并备份 `db/`，再使用已知可用的备份恢复。[安装及更新步骤](/guide/quick-start)
 
 ---
 
-### Q2: 浏览器驱动下载失败或网络超时？
-- **原因**：程序在首次启动时会尝试连接国内镜像源下载对应版本的 Chromium/Chromedriver，若开启了全局代理或网络断开可能导致握手失败。
-- **解决方案**：
-  - **务必关闭国外代理软件（科学上网）**。
-  - 确认本地 Chrome 浏览器为官方稳定版本。
+### 本机页面打不开或提示端口已占用
+
+检查运行终端，确认服务已启动。默认地址是 `http://127.0.0.1:9527/`。若 `9527` 被占用，先停止此前的 InternBridge 实例，或在 `java -jar` 命令后加 `--server.port=9530`，然后打开 `http://127.0.0.1:9530/`。源码版用 `./gradlew bootRun '--args=--server.port=9530'`，Windows 将 `./gradlew` 换成 `.\gradlew.bat`。
+
+Windows 的旧版 `start-local.ps1` 若提示脚本未签名，可从仓库根目录运行 `.\gradlew.bat bootRun`。
+
+### 无法打开招聘平台的浏览器窗口
+
+安装 Google Chrome 后，在对应平台页点「登录」。源码版如果停在构建或依赖下载阶段，检查终端中报错的地址。也可选择下载版，省去本地构建步骤。[启动方式](/guide/quick-start)
 
 ---
 

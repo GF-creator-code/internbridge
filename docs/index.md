@@ -11,8 +11,8 @@ hero:
       text: 🚀 快速上手
       link: /guide/quick-start
     - theme: alt
-      text: 🌱 上游原版项目
-      link: https://github.com/loks666/get_jobs
+      text: 下载本机版
+      link: https://github.com/GF-creator-code/internbridge/releases
 
 features:
   - icon: 🧭
@@ -55,15 +55,9 @@ features:
 
 ## 启动与第一次使用
 
-Windows 在安装 JDK 21、Node.js 和 Corepack 或 pnpm 后，可从 PowerShell 启动。
+本站是 InternBridge 的使用文档。安装 Java 21 后可运行下载版 JAR。从源码启动还需 JDK 21、Node.js 和 pnpm 或 Corepack。[完整安装与使用步骤](/guide/quick-start)
 
-```powershell
-git clone https://github.com/GF-creator-code/internbridge.git
-cd internbridge
-powershell -File .\start-local.ps1
-```
-
-打开 [本机投递工作台](http://127.0.0.1:9527/)：先在「设置中心」完成四个分区，再从「内地 / 香港」分组选平台登录并投递，最后到「投递数据看板」看汇总与每日日报。JobsDB 默认只采集，点岗位名称即可前往原站。[完整安装与使用步骤](/guide/quick-start)
+启动后打开 [本机投递工作台](http://127.0.0.1:9527/)。JobsDB 默认只采集，点岗位名称即可前往原站。
 
 ## 📑 文档说明
 

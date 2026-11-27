@@ -4,17 +4,31 @@
 
 ## 1. 启动本机投递工作台
 
-Windows 需要 Git、JDK 21、Node.js 22.13 或更高版本，以及 Corepack 或 pnpm。将 JDK 安装目录设为 `JAVA_HOME`。第一次启动需要联网获取构建依赖。
+### 下载版
+
+1. 安装 [Java 21](https://adoptium.net/temurin/releases/?version=21)。在终端运行 `java -version`，确认显示 21。
+2. 在 [Releases](https://github.com/GF-creator-code/internbridge/releases) 下载 `v0.2.0` 或更新版本的 JAR，放到一个可写的专用目录。
+3. 在该目录打开终端运行下方命令，将文件名换成所下载的版本。
+
+```sh
+java -jar internbridge-0.2.0.jar
+```
+
+打开 [本机投递工作台](http://127.0.0.1:9527/)。初次启动自动创建 `db/getjobs.db`。你可以先打开「投递数据看板」，确认页面显示空的投递记录。实际登录、采集或投递时还需安装 Google Chrome。公开文档站提供操作指南，本机工作台由 JAR 启动。
+
+`v0.1.0` 使用旧版页面。若 Releases 暂无新版下载，可用下面的源码方式体验当前的设置中心和看板。
+
+### 源码版
+
+需要 Git、JDK 21、Node.js 22.13 或更高版本，以及 pnpm 或 Corepack。将 `JAVA_HOME` 指向 JDK 21。第一次启动需要联网获取构建依赖。Windows 用户在 PowerShell 运行。
 
 ```powershell
 git clone https://github.com/GF-creator-code/internbridge.git
 cd internbridge
-powershell -File .\start-local.ps1
+.\gradlew.bat bootRun
 ```
 
-脚本首次运行时从上游 v2.0.1 下载数据库模板，校验后放到 `db/getjobs.db`。已有数据库会直接使用。Gradle 会构建管理页面并启动服务，打开本机的 [投递工作台](http://127.0.0.1:9527/)。
-
-macOS 或 Linux 用户可在项目根目录创建 `db` 目录，将上游的 `getjobs.db.template` 保存为 `db/getjobs.db`，然后运行 `./gradlew bootRun`。Windows 无法连接下载站时也可手动放置同一模板。[上游 v2.0.1 发布页](https://github.com/loks666/get_jobs/releases/tag/v2.0.1)
+macOS 和 Linux 用户克隆后，在仓库根目录运行 `./gradlew bootRun`。两种方式使用同一份内置数据库模板。遇到启动失败或端口冲突可查 [常见问题](/guide/faq)。
 
 ## 2. 在设置中心完成四个分区
 
@@ -22,7 +36,7 @@ macOS 或 Linux 用户可在项目根目录创建 `db` 目录，将上游的 `ge
 
 | 分区 | 要填的内容 |
 | --- | --- |
-| 连接与通知 | 模型地址、密钥、模型名称；可选的企业微信机器人 |
+| 连接与通知 | 使用 AI 时填写模型地址、密钥、模型名称。企业微信通知按需开启 |
 | 求职档案 | 工作形式（不限 / 实习 / 兼职 / 全职 / 校园招聘）、学历、到岗时间、简历路径与联系方式 |
 | 全局规则 | 意向城市（保存后点「应用到各平台」同步）与所有平台共用的黑名单 |
 | 简历与匹配 | 技能介绍、投递提示词、AI 开关与简历解析 |
@@ -47,9 +61,15 @@ JobsDB 默认只采集，职位名称可从「投递分析」打开原站；Offe
 
 ## 更新已有安装
 
-保留 `db/getjobs.db`，在运行服务的终端按 Ctrl+C，拉取最新代码后执行以下命令，重新生成页面并启动配套后端。
+在运行服务的终端按 Ctrl+C。备份工作目录里的 `db/`，以及已有的 `browser-data/` 和 `browser-data-tasks/`。下载版把新 JAR 放进同一目录后再运行，就能沿用数据和设置。
+
+从 `v0.1.0` 升级前，也可在旧工作台把保存在浏览器里的申请清单另行导出为 JSON。
+
+源码版更新后重新构建管理页面。Windows 执行以下命令。
 
 ```powershell
 git pull --ff-only
-powershell -File .\start-local.ps1 -PrebuildFrontend
+.\gradlew.bat bootRun -PrebuildFrontend
 ```
+
+macOS 和 Linux 执行 `git pull --ff-only` 后运行 `./gradlew bootRun -PrebuildFrontend`。
